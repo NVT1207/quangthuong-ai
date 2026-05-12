@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String?
+  passwordHash    String
+  balance         Float            @default(0)
+  role            String           @default("USER")
+  status          String           @default("ACTIVE")
+  createdAt       DateTime         @default(now())
+  // Affiliate fields
+  affiliateCode   String?          @unique
+  referredById    String?
+  apiKeys         ApiKey[]
+  topups          TopupRequest[]
+  usage           UsageLog[]
+  transactions    Transaction[]
+  referrals       User[]           @relation("UserReferrals")
+  referredBy      User?            @relation("UserReferrals", fields: [referredById], references: [id])
+  commissions     AffiliateCommission[] @relation("AffiliateEarner")
+  generatedCommissions AffiliateCommission[] @relation("ReferralSource")
+}
+
+model ApiKey {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  keyHash     String     @unique
+  prefix      String
+  suffix      String
+  enabled     Boolean    @default(true)
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime   @default(now())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usage       UsageLog[]
+}
+
+model Model {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  displayName    String
+  provider       String
+  category       String   @default("text")   // text | embedding | image | video | tts
+  priceUnit      String   @default("1M tokens") // "1M tokens" | "1 ảnh" | "1 giây" | "1M ký tự"
+  inputPrice     Float
+  outputPrice    Float
+  contextLength  Int
+  description    String?
+  active         Boolean  @default(true)
+  freeDiscount   Float    @default(0)
+  basicDiscount  Float    @default(0)
+  advDiscount    Float    @default(0)
+  speedTps       Float    @default(0)
+  latencyMs      Float    @default(0)
+  uptimeStatus   String   @default("good")
+  createdAt      DateTime @default(now())
+}
+
+model TopupRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  amount      Float
+  method      String
+  reference   String?
+  note        String?
+  status      String    @default("PENDING")
+  processedBy String?
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  userId       String
+  type         String
+  amount       Float
+  balanceAfter Float
+  description  String
+  refId        String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UsageLog {
+  id           String   @id @default(cuid())
+  userId       String
+  apiKeyId     String
+  modelSlug    String
+  inputTokens  Int
+  outputTokens Int
+  cost         Float
+  status       Int
+  ip           String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey       ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+}
+
+model AffiliateCommission {
+  id            String   @id @default(cuid())
+  earnerId      String                          // ai nhận hoa hồng
+  referredId    String                          // user nào sinh ra giao dịch
+  topupId       String?                         // nguồn topup
+  amount        Float                           // số tiền hoa hồng (VND)
+  rate          Float                           // % áp dụng
+  description   String
+  createdAt     DateTime @default(now())
+  earner        User     @relation("AffiliateEarner", fields: [earnerId], references: [id], onDelete: Cascade)
+  referred      User     @relation("ReferralSource", fields: [referredId], references: [id], onDelete: Cascade)
+}
+
+model BlogPost {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  excerpt     String
+  content     String                            // markdown
+  coverEmoji  String   @default("📝")
+  tag         String   @default("Tin tức")
+  published   Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model ChangelogEntry {
+  id          String   @id @default(cuid())
+  version     String
+  title       String
+  content     String                            // markdown
+  kind        String   @default("feature")      // feature | fix | improvement
+  releasedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+}

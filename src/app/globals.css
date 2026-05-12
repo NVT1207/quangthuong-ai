@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: #0a0a0b;
+  color: #f1f5f9;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  min-height: 100vh;
+}
+
+* { box-sizing: border-box; }
+
+::selection { background: rgba(245, 158, 11, 0.35); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.35); }
+
+@layer components {
+  .glass {
+    @apply bg-ink-900/60 backdrop-blur-xl border border-white/5;
+  }
+  .card {
+    @apply rounded-2xl bg-ink-900/60 border border-white/5 backdrop-blur-xl;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-honey-500 text-ink-950 hover:bg-honey-400 shadow-glow;
+  }
+  .btn-ghost {
+    @apply bg-white/5 text-white hover:bg-white/10 border border-white/10;
+  }
+  .btn-danger {
+    @apply bg-red-500/15 text-red-300 hover:bg-red-500/25 border border-red-500/30;
+  }
+  .input {
+    @apply w-full rounded-xl bg-ink-950/60 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-ink-200/40 focus:outline-none focus:border-honey-500/60 focus:ring-2 focus:ring-honey-500/20;
+  }
+  .label {
+    @apply block text-xs font-medium text-ink-200/80 mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink-200/70 hover:text-white hover:bg-white/5 transition;
+  }
+  .nav-link-active {
+    @apply bg-honey-500/10 text-honey-300 border border-honey-500/20;
+  }
+  .table-th {
+    @apply text-left px-4 py-3 text-xs font-medium text-ink-200/60 uppercase tracking-wider;
+  }
+  .table-td {
+    @apply px-4 py-3 text-sm border-t border-white/5;
+  }
+}
