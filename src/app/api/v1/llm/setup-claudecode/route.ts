@@ -26,11 +26,12 @@ export async function GET(req: NextRequest) {
   const host = h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = `${proto}://${host}`;
+  const anthropicBaseUrl = `${baseUrl}/api`;
 
   const settings = JSON.stringify(
     {
       env: {
-        ANTHROPIC_BASE_URL: baseUrl,
+        ANTHROPIC_BASE_URL: anthropicBaseUrl,
         ANTHROPIC_AUTH_TOKEN: key,
         ANTHROPIC_MODEL: sonnet,
         ANTHROPIC_SMALL_FAST_MODEL: haiku,
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
     settings,
     `JSON`,
     `printf "\\033[32m✓\\033[0m Claude Code đã được cấu hình cho QUANGTHUONG AI\\n"`,
-    `printf "  Base URL : ${baseUrl}\\n"`,
+    `printf "  Base URL : ${anthropicBaseUrl}\\n"`,
     `printf "  Mô hình  : sonnet=${sonnet} · haiku=${haiku} · opus=${opus}\\n"`,
     `printf "Mở terminal mới và chạy: claude\\n"`,
   ].join("\n");
