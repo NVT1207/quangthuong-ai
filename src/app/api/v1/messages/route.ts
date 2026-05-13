@@ -39,10 +39,6 @@ export async function POST(req: Request) {
     return err(503, "Upstream chưa cấu hình.", "service_unavailable");
   }
 
-  const key = await authenticate(req);
-  if (!key) return err(401, "Invalid API key", "authentication_error");
-  if (key.user.status === "BANNED") return err(403, "Account banned", "permission_error");
-
   let body: any;
   try { body = await req.json(); } catch { return err(400, "Invalid JSON"); }
   const modelSlug: string = body?.model;
@@ -51,7 +47,12 @@ export async function POST(req: Request) {
     return err(400, "Missing 'model' or 'messages'");
   }
 
-  const model = await prisma.model.findUnique({ where: { slug: modelSlug } });
+  const [key, model] = await Promise.all([
+    authenticate(req),
+    prisma.model.findUnique({ where: { slug: modelSlug } }),
+  ]);
+  if (!key) return err(401, "Invalid API key", "authentication_error");
+  if (key.user.status === "BANNED") return err(403, "Account banned", "permission_error");
   if (!model || !model.active) return err(404, `Model '${modelSlug}' not found`, "not_found_error");
 
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
