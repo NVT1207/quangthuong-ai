@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { countTokens, computeCost } from "@/lib/pricing";
 import { callUpstream, readNonStream, isUpstreamConfigured, UpstreamError } from "@/lib/upstream";
+import { tierDiscountField, type Tier } from "@/lib/tier";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -26,7 +27,10 @@ export async function POST(req: Request) {
   const inputText = messages.map((x: any) => x.content || "").join("\n");
   const estInputTokens = countTokens(inputText);
 
-  const minCost = computeCost(estInputTokens, 0, m.inputPrice, m.outputPrice);
+  const discountField = tierDiscountField((user?.tier as Tier) ?? "FREE");
+  const discount = ((m as any)[discountField] as number | undefined) ?? 0;
+
+  const minCost = computeCost(estInputTokens, 0, m.inputPrice, m.outputPrice, discount);
   if (user!.balance < minCost) {
     await prisma.usageLog.create({
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402 },
@@ -58,7 +62,7 @@ export async function POST(req: Request) {
 
   const inputTokens = parsed.promptTokens ?? estInputTokens;
   const outputTokens = parsed.completionTokens ?? countTokens(parsed.text);
-  const cost = computeCost(inputTokens, outputTokens, m.inputPrice, m.outputPrice);
+  const cost = computeCost(inputTokens, outputTokens, m.inputPrice, m.outputPrice, discount);
 
   const fresh = await prisma.user.findUnique({ where: { id: user!.id } });
   const balance = fresh?.balance ?? user!.balance;

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AFFILIATE_RATE } from "@/lib/affiliate";
 import { topupBonus } from "@/lib/topup";
+import { syncUserTier } from "@/lib/tier";
 
 const METHOD_LABEL: Record<string, string> = {
   qr: "QR Vietinbank",
@@ -72,5 +73,6 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
   }
 
   await prisma.$transaction(ops);
+  await syncUserTier(t.userId);
   return NextResponse.json({ ok: true });
 }

@@ -22,11 +22,21 @@ type ModelMeta = {
   inputPrice: number;
   outputPrice: number;
   freeDiscount: number;
+  basicDiscount: number;
+  advDiscount: number;
 };
+
+type Tier = "FREE" | "BASIC" | "ADV" | "ULTRA";
+
+function tierDiscountField(tier: Tier): "freeDiscount" | "basicDiscount" | "advDiscount" {
+  if (tier === "FREE") return "freeDiscount";
+  if (tier === "BASIC") return "basicDiscount";
+  return "advDiscount";
+}
 
 const PIE_COLORS = ["#a855f7", "#3b82f6", "#f59e0b", "#10b981", "#ec4899", "#06b6d4", "#ef4444", "#84cc16"];
 
-export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMeta[] }) {
+export function UsageClient({ logs, models, userTier = "FREE" }: { logs: LogItem[]; models: ModelMeta[]; userTier?: Tier }) {
   const [range, setRange] = useState<7 | 30 | 90>(7);
   const [statusFilter, setStatusFilter] = useState<"all" | "ok" | "fail">("all");
 
@@ -37,9 +47,10 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
   }, [models]);
 
   const enriched = useMemo(() => {
+    const field = tierDiscountField(userTier);
     return logs.map((l) => {
       const meta = modelMap.get(l.modelSlug);
-      const discount = meta?.freeDiscount ?? 0;
+      const discount = (meta?.[field] as number | undefined) ?? 0;
       const cacheTokens = simulatedCacheTokens(l.id, l.inputTokens);
       const totalTokens = l.inputTokens + l.outputTokens;
       const regularTokens = Math.max(0, totalTokens - cacheTokens);

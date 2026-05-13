@@ -13,7 +13,7 @@ export default async function UsagePage() {
   start90.setDate(start90.getDate() - 89);
   start90.setHours(0, 0, 0, 0);
 
-  const [logs, models] = await Promise.all([
+  const [logs, models, user] = await Promise.all([
     prisma.usageLog.findMany({
       where: { userId, createdAt: { gte: start90 } },
       orderBy: { createdAt: "desc" },
@@ -27,8 +27,11 @@ export default async function UsagePage() {
         inputPrice: true,
         outputPrice: true,
         freeDiscount: true,
+        basicDiscount: true,
+        advDiscount: true,
       },
     }),
+    prisma.user.findUnique({ where: { id: userId }, select: { tier: true } }),
   ]);
 
   const logsForClient = logs.map((l) => ({
@@ -41,5 +44,5 @@ export default async function UsagePage() {
     createdAt: l.createdAt.toISOString(),
   }));
 
-  return <UsageClient logs={logsForClient} models={models} />;
+  return <UsageClient logs={logsForClient} models={models} userTier={(user?.tier as any) ?? "FREE"} />;
 }

@@ -183,7 +183,6 @@ export function ModelsBrowser({
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((m) => {
             const uptime = UPTIME_STYLE[m.uptimeStatus] ?? UPTIME_STYLE.good;
-            const hasTier = m.freeDiscount > 0 || m.basicDiscount > 0 || m.advDiscount > 0;
             const unitShort = m.priceUnit === "1M tokens" ? "/1M" : `/${m.priceUnit}`;
             return (
               <div key={m.id} className="card p-5 flex flex-col">
@@ -232,14 +231,6 @@ export function ModelsBrowser({
                     {m.latencyMs > 0 && (
                       <span className="inline-flex items-center gap-1"><Clock size={11} className="text-ink-200/60" />{(m.latencyMs / 1000).toFixed(m.latencyMs >= 1000 ? 1 : 2)}s</span>
                     )}
-                  </div>
-                )}
-
-                {hasTier && (
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {m.freeDiscount > 0 && <span className="badge bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[10px]">Free −{m.freeDiscount}%</span>}
-                    {m.basicDiscount > 0 && <span className="badge bg-sky-500/10 text-sky-300 border border-sky-500/20 text-[10px]">Basic −{m.basicDiscount}%</span>}
-                    {m.advDiscount > 0 && <span className="badge bg-honey-500/10 text-honey-300 border border-honey-500/20 text-[10px]">Adv+ −{m.advDiscount}%</span>}
                   </div>
                 )}
 

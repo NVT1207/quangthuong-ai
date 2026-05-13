@@ -19,14 +19,34 @@ model User {
   // Affiliate fields
   affiliateCode   String?          @unique
   referredById    String?
+  // Tier subscription
+  tier            String           @default("FREE")   // FREE | BASIC | ADV | ULTRA
+  tierSource      String           @default("AUTO")   // AUTO | PAID
+  tierExpiresAt   DateTime?
   apiKeys         ApiKey[]
   topups          TopupRequest[]
   usage           UsageLog[]
   transactions    Transaction[]
+  subscriptions   Subscription[]
   referrals       User[]           @relation("UserReferrals")
   referredBy      User?            @relation("UserReferrals", fields: [referredById], references: [id])
   commissions     AffiliateCommission[] @relation("AffiliateEarner")
   generatedCommissions AffiliateCommission[] @relation("ReferralSource")
+}
+
+model Subscription {
+  id         String   @id @default(cuid())
+  userId     String
+  plan       String                              // BASIC | ADV
+  period     String                              // MONTH | HALF_YEAR | YEAR
+  amount     Float                               // VND đã trừ vào balance lúc mua
+  startedAt  DateTime @default(now())
+  expiresAt  DateTime
+  status     String   @default("ACTIVE")         // ACTIVE | EXPIRED | CANCELLED
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
 }
 
 model ApiKey {

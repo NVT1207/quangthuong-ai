@@ -9,6 +9,7 @@
     "lint": "next lint",
     "seed": "tsx prisma/seed.ts",
     "seed:competitor-models": "tsx prisma/seed-models-competitor.ts",
+    "seed:backfill-tier": "tsx prisma/seed-tier-backfill.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"

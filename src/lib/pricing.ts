@@ -7,9 +7,11 @@ export function computeCost(
   inputTokens: number,
   outputTokens: number,
   inputPricePerMillion: number,
-  outputPricePerMillion: number
+  outputPricePerMillion: number,
+  discountPercent: number = 0
 ) {
   const inputCost = (inputTokens / 1_000_000) * inputPricePerMillion;
   const outputCost = (outputTokens / 1_000_000) * outputPricePerMillion;
-  return inputCost + outputCost;
+  const factor = 1 - discountPercent / 100;
+  return (inputCost + outputCost) * factor;
 }

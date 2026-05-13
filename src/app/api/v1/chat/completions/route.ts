@@ -4,6 +4,7 @@ import { verifyKey } from "@/lib/api-key";
 import { countTokens, computeCost } from "@/lib/pricing";
 import { callUpstream, readNonStream, UpstreamError, isUpstreamConfigured } from "@/lib/upstream";
 import { checkApiKeyRateLimit, RATE_LIMIT_PER_MIN } from "@/lib/rate-limit";
+import { tierDiscountField, type Tier } from "@/lib/tier";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -86,8 +87,11 @@ export async function POST(req: Request) {
   const inputText = messages.map((x: any) => x.content ?? "").join("\n");
   const estInputTokens = countTokens(inputText);
 
+  const discountField = tierDiscountField((key.user.tier as Tier) ?? "FREE");
+  const discount = ((model as any)[discountField] as number | undefined) ?? 0;
+
   // Pre-check số dư bằng giá tối thiểu (chỉ input). Đủ tiền mới gọi upstream.
-  const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice);
+  const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice, discount);
   if (key.user.balance < minCost) {
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip });
     return err(402, "Insufficient balance. Please top up.", "billing_error");
@@ -156,7 +160,7 @@ export async function POST(req: Request) {
 
         // Sau khi stream kết thúc → tính cost + ghi log + trừ tiền
         const outputTokens = upstreamCompletionTokens ?? countTokens(collectedText);
-        const cost = computeCost(estInputTokens, outputTokens, model.inputPrice, model.outputPrice);
+        const cost = computeCost(estInputTokens, outputTokens, model.inputPrice, model.outputPrice, discount);
         // Re-fetch balance để tránh race với request khác
         const fresh = await prisma.user.findUnique({ where: { id: key.userId } });
         const balance = fresh?.balance ?? key.user.balance;
@@ -204,7 +208,7 @@ export async function POST(req: Request) {
 
   const inputTokens = parsed.promptTokens ?? estInputTokens;
   const outputTokens = parsed.completionTokens ?? countTokens(parsed.text);
-  const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice);
+  const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice, discount);
 
   const fresh = await prisma.user.findUnique({ where: { id: key.userId } });
   const balance = fresh?.balance ?? key.user.balance;

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyKey } from "@/lib/api-key";
 import { countTokens, computeCost } from "@/lib/pricing";
 import { checkApiKeyRateLimit, RATE_LIMIT_PER_MIN } from "@/lib/rate-limit";
+import { tierDiscountField, type Tier } from "@/lib/tier";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -78,7 +79,9 @@ export async function POST(req: Request) {
     return "";
   }).join("\n");
   const estInputTokens = countTokens(sysText + "\n" + msgText);
-  const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice);
+  const discountField = tierDiscountField((key.user.tier as Tier) ?? "FREE");
+  const discount = ((model as any)[discountField] as number | undefined) ?? 0;
+  const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice, discount);
   if (key.user.balance < minCost) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip },
@@ -158,7 +161,7 @@ export async function POST(req: Request) {
         }
         controller.close();
 
-        const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice);
+        const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice, discount);
         const fresh = await prisma.user.findUnique({ where: { id: key.userId } });
         const balance = fresh?.balance ?? key.user.balance;
         const actualCost = Math.min(cost, balance);
@@ -195,7 +198,7 @@ export async function POST(req: Request) {
   }
   const inputTokens = json?.usage?.input_tokens ?? estInputTokens;
   const outputTokens = json?.usage?.output_tokens ?? 0;
-  const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice);
+  const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice, discount);
 
   const fresh = await prisma.user.findUnique({ where: { id: key.userId } });
   const balance = fresh?.balance ?? key.user.balance;
