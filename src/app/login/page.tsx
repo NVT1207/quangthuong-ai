@@ -66,11 +66,6 @@ function LoginForm() {
             Chưa có tài khoản?{" "}
             <Link href="/register" className="text-honey-400 hover:underline">Đăng ký</Link>
           </p>
-          <div className="mt-5 pt-5 border-t border-white/5 text-xs text-ink-200/50 space-y-1">
-            <p>Tài khoản demo:</p>
-            <p>• User: <code className="text-honey-300">demo@beeknoee.local</code> / <code className="text-honey-300">demo123</code></p>
-            <p>• Admin: <code className="text-honey-300">admin@beeknoee.local</code> / <code className="text-honey-300">admin123</code></p>
-          </div>
         </div>
         <p className="text-center text-xs text-ink-200/50 mt-4">
           <Link href="/">← Về trang chủ</Link>
