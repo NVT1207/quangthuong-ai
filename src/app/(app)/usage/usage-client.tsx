@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 import { Hash, Zap, CreditCard, TrendingUp, Sparkles, PiggyBank, Calendar, Receipt, CheckCircle2, Download } from "lucide-react";
-import { formatVND, formatNumber, formatDateTime } from "@/lib/format";
+import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 import { simulatedCacheTokens, computeOriginal, formatShortDate, daysInMonth } from "@/lib/usage-stats";
 
 type LogItem = {
@@ -219,9 +219,9 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
         <StatCard
           icon={<CreditCard size={14} className="text-rose-300" />}
           title="Tổng Chi phí"
-          value={formatVND(Math.round(allStats.totalCost))}
+          value={formatUSD(Math.round(allStats.totalCost))}
           valueClass="text-rose-300"
-          subtitle={`${range} ngày: ${formatVND(Math.round(rangeStats.cost))}`}
+          subtitle={`${range} ngày: ${formatUSD(Math.round(rangeStats.cost))}`}
         />
         <StatCard
           icon={<TrendingUp size={14} className="text-emerald-300" />}
@@ -233,7 +233,7 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
         <StatCard
           icon={<Sparkles size={14} className="text-sky-300" />}
           title="AG + Codex Tiết kiệm"
-          value={formatVND(Math.round(allStats.totalCacheSavings))}
+          value={formatUSD(Math.round(allStats.totalCacheSavings))}
           valueClass="text-sky-300"
           subtitle={
             <span className="inline-flex items-center gap-2 text-[11px]">
@@ -245,7 +245,7 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
         <StatCard
           icon={<PiggyBank size={14} className="text-emerald-300" />}
           title="Tổng Tiết kiệm"
-          value={formatVND(Math.round(allStats.totalSavings))}
+          value={formatUSD(Math.round(allStats.totalSavings))}
           valueClass="text-emerald-300"
           subtitle={
             <span className="inline-flex items-center gap-1 text-emerald-300/80">
@@ -264,7 +264,7 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
               <div className="flex items-center gap-3 mt-2 text-xs text-ink-200/60 flex-wrap">
                 <LegendDot color="#10b981" label="Cache Hit" />
                 <LegendDot color="#3b82f6" label="Regular" />
-                <LegendDot color="#ef4444" label="Chi phí (VND)" />
+                <LegendDot color="#ef4444" label="Chi phí (USD)" />
                 <span className="inline-flex items-center gap-1.5 text-purple-300">
                   <svg width="18" height="2"><line x1="0" y1="1" x2="18" y2="1" stroke="#a855f7" strokeWidth="2" /></svg>
                   Requests
@@ -297,7 +297,7 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
                   contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
                   labelStyle={{ color: "#fbbf24", fontWeight: 600 }}
                   formatter={(value: number, name: string) => {
-                    if (name === "Chi phí") return [`${formatVND(Math.round(value))}`, name];
+                    if (name === "Chi phí") return [`${formatUSD(Math.round(value))}`, name];
                     if (name === "Requests") return [formatNumber(value), name];
                     return [`${formatNumber(value)} tokens`, name];
                   }}
@@ -318,8 +318,8 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
               <span>Dự báo cuối tháng</span>
             </div>
             <p className="text-[11px] text-ink-200/50 mt-0.5">Ngày {forecast.monthEndLabel}</p>
-            <p className="text-2xl font-bold text-honey-300 mt-2">{formatVND(Math.round(forecast.projected))}</p>
-            <p className="text-xs text-ink-200/60 mt-1">Đã chi: {formatVND(Math.round(forecast.monthSpent))}</p>
+            <p className="text-2xl font-bold text-honey-300 mt-2">{formatUSD(Math.round(forecast.projected))}</p>
+            <p className="text-xs text-ink-200/60 mt-1">Đã chi: {formatUSD(Math.round(forecast.monthSpent))}</p>
             <div className="mt-2 h-2 rounded-full bg-white/5 overflow-hidden">
               <div className="h-full bg-gradient-to-r from-honey-500 to-rose-500" style={{ width: `${forecast.pct}%` }} />
             </div>
@@ -335,7 +335,7 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
               <span>Chi phí TB / Request</span>
             </div>
             <p className="text-[11px] text-ink-200/50 mt-0.5">{avgCost.requests} requests</p>
-            <p className="text-2xl font-bold text-purple-300 mt-2">{formatVND(Math.round(avgCost.avg))}</p>
+            <p className="text-2xl font-bold text-purple-300 mt-2">{formatUSD(Math.round(avgCost.avg))}</p>
             <p className="text-xs text-ink-200/50 mt-2">
               {avgCost.requests < 2 ? "Cần ít nhất 2 ngày dữ liệu để có ý nghĩa" : "Trung bình toàn bộ thời gian"}
             </p>
@@ -371,7 +371,7 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
                       </td>
                       <td className="text-right">{formatNumber(m.requests)}</td>
                       <td className="text-right">{formatNumber(m.tokens)}</td>
-                      <td className="text-right">{formatVND(Math.round(m.cost))}</td>
+                      <td className="text-right">{formatUSD(Math.round(m.cost))}</td>
                       <td className="text-right pl-4 min-w-[120px]">
                         <div className="flex items-center gap-2 justify-end">
                           <div className="w-16 h-1.5 rounded-full bg-white/5 overflow-hidden">
@@ -505,9 +505,9 @@ export function UsageClient({ logs, models }: { logs: LogItem[]; models: ModelMe
                   <td className="py-2.5 px-2 text-right text-xs font-medium">{formatNumber(l.totalTokens)}</td>
                   <td className="py-2.5 px-2 text-right text-xs whitespace-nowrap">
                     {l.discount > 0 && l.originalCost > l.cost && (
-                      <span className="text-ink-200/40 line-through mr-1">{formatVND(Math.round(l.originalCost * 100) / 100)}</span>
+                      <span className="text-ink-200/40 line-through mr-1">{formatUSD(Math.round(l.originalCost * 100) / 100)}</span>
                     )}
-                    <span className={l.cost > 0 ? "text-rose-300 font-medium" : "text-ink-200/40"}>{formatVND(Math.round(l.cost * 100) / 100)}</span>
+                    <span className={l.cost > 0 ? "text-rose-300 font-medium" : "text-ink-200/40"}>{formatUSD(Math.round(l.cost * 100) / 100)}</span>
                   </td>
                 </tr>
               ))}

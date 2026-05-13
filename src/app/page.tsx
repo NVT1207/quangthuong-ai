@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Check, Sparkles, Zap, Wallet, Shield, Activity } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatUSD } from "@/lib/format";
 import { CodeTabs, FaqAccordion } from "./_landing-interactive";
 
 export const dynamic = "force-dynamic";
@@ -202,8 +202,8 @@ function ModelsShowcase({ models }: { models: any[] }) {
           <div className="hidden md:grid grid-cols-12 px-6 py-4 bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500">
             <div className="col-span-3">Model</div>
             <div className="col-span-5">Mô tả</div>
-            <div className="col-span-2 text-right">Input / 1M token</div>
-            <div className="col-span-2 text-right">Output / 1M token</div>
+            <div className="col-span-2 text-right">Input / 1M tokens</div>
+            <div className="col-span-2 text-right">Output / 1M tokens</div>
           </div>
           {models.map((m) => (
             <div key={m.id} className="grid md:grid-cols-12 gap-2 px-6 py-5 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition">
@@ -212,8 +212,8 @@ function ModelsShowcase({ models }: { models: any[] }) {
                 <span className="font-semibold text-slate-900">{m.displayName}</span>
               </div>
               <div className="col-span-5 text-sm text-slate-600">{m.description || "—"}</div>
-              <div className="col-span-2 text-right text-sm font-mono text-slate-900">{formatNumber(m.inputPrice)} ₫</div>
-              <div className="col-span-2 text-right text-sm font-mono text-slate-900">{formatNumber(m.outputPrice)} ₫</div>
+              <div className="col-span-2 text-right text-sm font-mono text-slate-900">{formatUSD(m.inputPrice)}</div>
+              <div className="col-span-2 text-right text-sm font-mono text-slate-900">{formatUSD(m.outputPrice)}</div>
             </div>
           ))}
         </div>

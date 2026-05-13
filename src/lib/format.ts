@@ -1,3 +1,5 @@
+export const USD_VND_RATE = 25000;
+
 export function formatVND(n: number | null | undefined) {
   if (n === null || n === undefined) return "0 ₫";
   return new Intl.NumberFormat("vi-VN", {
@@ -6,6 +8,20 @@ export function formatVND(n: number | null | undefined) {
     maximumFractionDigits: 0,
   }).format(n);
 }
+
+export function formatUSD(vnd: number | null | undefined) {
+  if (vnd === null || vnd === undefined) return "$0.00";
+  const usd = vnd / USD_VND_RATE;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(usd);
+}
+
+export const vndToUsd = (vnd: number) => vnd / USD_VND_RATE;
+export const usdToVnd = (usd: number) => Math.round(usd * USD_VND_RATE);
 
 export function formatNumber(n: number | null | undefined) {
   if (n === null || n === undefined) return "0";

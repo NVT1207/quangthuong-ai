@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { formatVND, formatNumber, formatDateTime } from "@/lib/format";
+import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +62,7 @@ export default async function AdminLogsPage({ searchParams }: { searchParams: { 
                 <td className="table-td text-sm">{l.user.email}</td>
                 <td className="table-td"><span className="badge bg-white/5">{l.modelSlug}</span></td>
                 <td className="table-td text-right">{formatNumber(l.inputTokens)} / {formatNumber(l.outputTokens)}</td>
-                <td className="table-td text-right text-honey-300">{formatVND(l.cost)}</td>
+                <td className="table-td text-right text-honey-300">{formatUSD(l.cost)}</td>
                 <td className="table-td text-ink-200/60 font-mono text-xs">{l.ip || "—"}</td>
                 <td className="table-td"><span className={`badge ${l.status === 200 ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}>{l.status}</span></td>
               </tr>

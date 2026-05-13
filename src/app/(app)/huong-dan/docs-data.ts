@@ -212,7 +212,7 @@ print(img.data[0].url)
 
 ## Tính giá
 
-Image model tính theo **₫ / 1 ảnh** thay vì token. Xem giá trực tiếp ở trang **Image Models**.`,
+Image model tính theo **$ / 1 ảnh** thay vì token. Xem giá trực tiếp ở trang **Image Models**.`,
   },
   {
     slug: "video-generation",
@@ -257,7 +257,7 @@ Khi \`status: "succeeded"\` sẽ có \`url\` để download mp4.
 - **kling-3.0-std** rẻ nhất, phù hợp social content ngắn
 - **seedance-2-pro** mạnh ở chuyển động phức tạp, dance/sports
 
-Tính giá theo **₫ / 1 giây video** — render càng dài càng tốn.`,
+Tính giá theo **$ / 1 giây video** — render càng dài càng tốn.`,
   },
   {
     slug: "text-to-speech",
@@ -292,7 +292,7 @@ Google Cloud TTS hỗ trợ giọng tiếng Việt: \`vi-VN-Wavenet-A\`, \`vi-VN
 
 ## Tính giá
 
-TTS tính theo **₫ / 1M ký tự** — text càng dài càng tốn. Một bài blog 1000 từ ~ 5000 ký tự = giá rất rẻ.`,
+TTS tính theo **$ / 1M ký tự** — text càng dài càng tốn. Một bài blog 1000 từ ~ 5000 ký tự = giá rất rẻ.`,
   },
   {
     slug: "billing",

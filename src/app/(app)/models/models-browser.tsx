@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
 import { Zap, Clock, Search } from "lucide-react";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, formatUSD } from "@/lib/format";
 import { CopySlug } from "./copy-slug";
 
 type ModelItem = {
@@ -211,12 +211,12 @@ export function ModelsBrowser({
                 <div className="space-y-1 text-sm mb-3">
                   <div className="flex justify-between">
                     <span className="text-ink-200/50">{showOutput ? "Input" : "Giá"}</span>
-                    <span className="text-honey-300">{formatNumber(m.inputPrice)} ₫{unitShort}</span>
+                    <span className="text-honey-300">{formatUSD(m.inputPrice)}{unitShort}</span>
                   </div>
                   {showOutput && m.outputPrice > 0 && (
                     <div className="flex justify-between">
                       <span className="text-ink-200/50">Output</span>
-                      <span className="text-honey-300">{formatNumber(m.outputPrice)} ₫{unitShort}</span>
+                      <span className="text-honey-300">{formatUSD(m.outputPrice)}{unitShort}</span>
                     </div>
                   )}
                   {showContext && m.contextLength > 0 && (

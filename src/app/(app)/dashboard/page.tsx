@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { StatsCard } from "@/components/stats-card";
 import { UsageChart } from "@/components/usage-chart";
 import { Wallet, Activity, Coins, Hash } from "lucide-react";
-import { formatVND, formatNumber, formatDateTime } from "@/lib/format";
+import { formatVND, formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ export default async function DashboardPage() {
         <StatsCard icon={Wallet} label="Số dư" value={formatVND(user!.balance)} hint="Khả dụng để gọi API" />
         <StatsCard icon={Activity} label="Requests hôm nay" value={formatNumber(todayReq)} accent="blue" />
         <StatsCard icon={Hash} label="Tokens hôm nay" value={formatNumber(todayTokens)} accent="green" />
-        <StatsCard icon={Coins} label="Chi phí hôm nay" value={formatVND(todayCost)} accent="rose" />
+        <StatsCard icon={Coins} label="Chi phí hôm nay" value={formatUSD(todayCost)} accent="rose" />
       </div>
 
       <UsageChart data={chartData} />
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
                     <td className="table-td"><span className="badge bg-white/5">{l.modelSlug}</span></td>
                     <td className="table-td text-right">{formatNumber(l.inputTokens)}</td>
                     <td className="table-td text-right">{formatNumber(l.outputTokens)}</td>
-                    <td className="table-td text-right text-honey-300">{formatVND(l.cost)}</td>
+                    <td className="table-td text-right text-honey-300">{formatUSD(l.cost)}</td>
                     <td className="table-td text-right">
                       <span className={`badge ${l.status === 200 ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}>{l.status}</span>
                     </td>

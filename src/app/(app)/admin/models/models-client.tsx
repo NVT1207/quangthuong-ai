@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Edit, Trash2, X, Loader2 } from "lucide-react";
-import { formatNumber } from "@/lib/format";
+import { formatUSD, USD_VND_RATE } from "@/lib/format";
 
 type M = {
   id: string; slug: string; displayName: string; provider: string;
@@ -89,8 +89,8 @@ export function ModelsAdminClient({ initial }: { initial: M[] }) {
               </select>
             </div>
             <div><label className="label">Context length</label><input type="number" value={editing.contextLength || 0} onChange={(e) => setEditing({ ...editing, contextLength: parseInt(e.target.value) || 0 })} className="input" /></div>
-            <div><label className="label">Giá input (₫/1M token)</label><input type="number" value={editing.inputPrice || 0} onChange={(e) => setEditing({ ...editing, inputPrice: parseFloat(e.target.value) || 0 })} className="input" /></div>
-            <div><label className="label">Giá output (₫/1M token)</label><input type="number" value={editing.outputPrice || 0} onChange={(e) => setEditing({ ...editing, outputPrice: parseFloat(e.target.value) || 0 })} className="input" /></div>
+            <div><label className="label">Giá input ($/1M tokens)</label><input type="number" step="0.001" value={editing.inputPrice ? (editing.inputPrice / USD_VND_RATE) : 0} onChange={(e) => setEditing({ ...editing, inputPrice: Math.round((parseFloat(e.target.value) || 0) * USD_VND_RATE) })} className="input" /></div>
+            <div><label className="label">Giá output ($/1M tokens)</label><input type="number" step="0.001" value={editing.outputPrice ? (editing.outputPrice / USD_VND_RATE) : 0} onChange={(e) => setEditing({ ...editing, outputPrice: Math.round((parseFloat(e.target.value) || 0) * USD_VND_RATE) })} className="input" /></div>
 
             <div><label className="label">Giảm Free (%)</label><input type="number" value={editing.freeDiscount ?? 0} onChange={(e) => setEditing({ ...editing, freeDiscount: parseFloat(e.target.value) || 0 })} className="input" /></div>
             <div><label className="label">Giảm Basic (%)</label><input type="number" value={editing.basicDiscount ?? 0} onChange={(e) => setEditing({ ...editing, basicDiscount: parseFloat(e.target.value) || 0 })} className="input" /></div>
@@ -136,9 +136,9 @@ export function ModelsAdminClient({ initial }: { initial: M[] }) {
               <tr key={m.id}>
                 <td className="table-td"><p className="font-medium">{m.displayName}</p><p className="text-xs text-ink-200/50 font-mono">{m.slug}</p></td>
                 <td className="table-td"><span className="badge bg-white/5">{m.provider}</span></td>
-                <td className="table-td text-right text-honey-300">{formatNumber(m.inputPrice)} ₫</td>
-                <td className="table-td text-right text-honey-300">{formatNumber(m.outputPrice)} ₫</td>
-                <td className="table-td text-right">{formatNumber(m.contextLength)}</td>
+                <td className="table-td text-right text-honey-300">{formatUSD(m.inputPrice)}</td>
+                <td className="table-td text-right text-honey-300">{formatUSD(m.outputPrice)}</td>
+                <td className="table-td text-right">{m.contextLength.toLocaleString()}</td>
                 <td className="table-td text-center text-xs text-ink-200/70">{m.freeDiscount}/{m.basicDiscount}/{m.advDiscount}%</td>
                 <td className="table-td text-center"><span className={`inline-block w-2 h-2 rounded-full ${UPTIME_DOT[m.uptimeStatus] ?? "bg-white/30"}`} title={m.uptimeStatus} /></td>
                 <td className="table-td"><span className={`badge ${m.active ? "bg-emerald-500/15 text-emerald-300" : "bg-ink-700/40 text-ink-200/50"}`}>{m.active ? "ON" : "OFF"}</span></td>

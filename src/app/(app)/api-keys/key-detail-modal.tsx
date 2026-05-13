@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { X, BarChart3, Clock, Hash, DollarSign, Activity } from "lucide-react";
-import { formatVND, formatNumber, formatDateTime } from "@/lib/format";
+import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 
 type Detail = {
   key: { id: string; name: string; prefix: string; suffix: string; enabled: boolean; createdAt: string; lastUsedAt: string | null };
@@ -68,7 +68,7 @@ export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () 
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard icon={<Activity size={14} />} label="Tổng requests" value={formatNumber(data.stats.totalRequests)} />
-              <StatCard icon={<DollarSign size={14} />} label="Tổng chi" value={formatVND(data.stats.totalCost)} accent="emerald" />
+              <StatCard icon={<DollarSign size={14} />} label="Tổng chi" value={formatUSD(data.stats.totalCost)} accent="emerald" />
               <StatCard icon={<Hash size={14} />} label="Tokens" value={formatNumber(data.stats.totalInputTokens + data.stats.totalOutputTokens)} />
               <StatCard icon={<Clock size={14} />} label="Lần dùng cuối" value={data.key.lastUsedAt ? formatDateTime(data.key.lastUsedAt) : "Chưa dùng"} small />
             </div>
@@ -78,7 +78,7 @@ export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () 
                 {data.chart.map((c) => {
                   const h = Math.max(4, (c.cost / maxCost) * 100);
                   return (
-                    <div key={c.date} className="flex-1 flex flex-col items-center gap-1.5" title={`${c.date}: ${formatVND(c.cost)} · ${c.count} req`}>
+                    <div key={c.date} className="flex-1 flex flex-col items-center gap-1.5" title={`${c.date}: ${formatUSD(c.cost)} · ${c.count} req`}>
                       <div className="w-full flex-1 flex items-end">
                         <div
                           className={`w-full rounded-t ${c.cost > 0 ? "bg-gradient-to-t from-sky-500/70 to-violet-500/70" : "bg-white/5"}`}
@@ -105,7 +105,7 @@ export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () 
                       </div>
                       <div className="text-right shrink-0">
                         <p className="font-mono text-sm">{formatNumber(m.count)} req</p>
-                        <p className="text-[11px] font-mono text-emerald-300/80">{formatVND(m.cost)}</p>
+                        <p className="text-[11px] font-mono text-emerald-300/80">{formatUSD(m.cost)}</p>
                       </div>
                     </div>
                   ))}
@@ -134,7 +134,7 @@ export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () 
                           <td className="px-3 py-2 font-mono text-ink-200/70">{formatDateTime(r.createdAt)}</td>
                           <td className="px-3 py-2 font-mono">{r.modelName}</td>
                           <td className="px-3 py-2 font-mono text-right text-ink-200/70">{formatNumber(r.inputTokens)} / {formatNumber(r.outputTokens)}</td>
-                          <td className="px-3 py-2 font-mono text-right text-emerald-300/80">{formatVND(r.cost)}</td>
+                          <td className="px-3 py-2 font-mono text-right text-emerald-300/80">{formatUSD(r.cost)}</td>
                           <td className="px-3 py-2 text-right">
                             <span className={
                               r.status >= 200 && r.status < 300

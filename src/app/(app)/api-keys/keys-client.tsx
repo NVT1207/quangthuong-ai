@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Copy, Check, KeyRound, AlertTriangle, Search, Pencil, Eye } from "lucide-react";
 import { CliPanels, type ModelOpt } from "./cli-panels";
 import { KeyDetailModal } from "./key-detail-modal";
-import { formatVND, formatNumber } from "@/lib/format";
+import { formatUSD, formatNumber } from "@/lib/format";
 
 type Key = {
   id: string;
@@ -227,7 +227,7 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
                     </td>
                     <td className="table-td font-mono">{formatNumber(k.totalRequests)}</td>
                     <td className="table-td font-mono">
-                      <span className={k.totalCost > 0 ? "text-emerald-400" : "text-ink-200/50"}>{formatVND(k.totalCost)}</span>
+                      <span className={k.totalCost > 0 ? "text-emerald-400" : "text-ink-200/50"}>{formatUSD(k.totalCost)}</span>
                     </td>
                     <td className="table-td">
                       <div className="flex items-center gap-2">

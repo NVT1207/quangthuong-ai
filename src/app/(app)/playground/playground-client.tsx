@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, User, Sparkles, Trash2 } from "lucide-react";
-import { formatVND } from "@/lib/format";
+import { formatUSD } from "@/lib/format";
 
 type Msg = { role: "user" | "assistant" | "system"; content: string };
 
@@ -66,7 +66,7 @@ export function PlaygroundClient({ models }: { models: { slug: string; name: str
             <p className="text-xs text-ink-200/50 mb-2">Lần gọi gần nhất</p>
             <div className="flex justify-between"><span>Input tokens</span><span>{lastUsage.in}</span></div>
             <div className="flex justify-between"><span>Output tokens</span><span>{lastUsage.out}</span></div>
-            <div className="flex justify-between font-medium pt-2 border-t border-white/5"><span>Chi phí</span><span className="text-honey-300">{formatVND(lastUsage.cost)}</span></div>
+            <div className="flex justify-between font-medium pt-2 border-t border-white/5"><span>Chi phí</span><span className="text-honey-300">{formatUSD(lastUsage.cost)}</span></div>
           </div>
         )}
       </div>
