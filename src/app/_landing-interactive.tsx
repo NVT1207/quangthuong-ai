@@ -105,32 +105,32 @@ const FAQ_ITEMS = [
 export function FaqAccordion() {
   const [open, setOpen] = useState(0);
   return (
-    <div className="divide-y divide-slate-200">
+    <div className="divide-y divide-white/5">
       {FAQ_ITEMS.map((item, i) => {
         const isOpen = open === i;
         return (
           <div key={i}>
             <button
               onClick={() => setOpen(isOpen ? -1 : i)}
-              className="w-full py-6 flex items-center justify-between text-left"
+              className="w-full py-6 flex items-center justify-between text-left group"
             >
               <span className="flex items-center gap-6">
-                <span className="text-sm font-mono text-slate-400">
+                <span className="text-sm font-mono text-honey-400/60">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <span className="text-lg font-semibold text-slate-900">
+                <span className="text-lg font-semibold text-white group-hover:text-honey-200 transition">
                   {item.q}
                 </span>
               </span>
               <ChevronDown
                 size={20}
-                className={`text-slate-500 transition-transform ${
-                  isOpen ? "rotate-180" : ""
+                className={`text-ink-200/50 transition-transform ${
+                  isOpen ? "rotate-180 text-honey-400" : ""
                 }`}
               />
             </button>
             {isOpen && (
-              <div className="pb-6 pl-16 pr-8 text-slate-600 leading-relaxed max-w-3xl">
+              <div className="pb-6 pl-16 pr-8 text-ink-200/70 leading-relaxed max-w-3xl">
                 {item.a}
               </div>
             )}
