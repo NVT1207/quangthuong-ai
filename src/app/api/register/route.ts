@@ -24,12 +24,9 @@ export async function POST(req: Request) {
       email: email.toLowerCase(),
       name: name || null,
       passwordHash,
-      balance: 10000,
+      balance: 0,
       referredById: referrer?.id ?? null,
     },
-  });
-  await prisma.transaction.create({
-    data: { userId: user.id, type: "TOPUP", amount: 10000, balanceAfter: 10000, description: "Khuyến mãi đăng ký" },
   });
   return NextResponse.json({ ok: true, id: user.id });
 }

@@ -53,7 +53,7 @@ function RegisterForm() {
         <div className="text-center mb-6"><Logo size={32} /></div>
         <div className="card p-7">
           <h1 className="text-2xl font-bold mb-1">Đăng ký</h1>
-          <p className="text-sm text-ink-200/60 mb-6">Tạo tài khoản miễn phí, nhận 10.000₫ dùng thử</p>
+          <p className="text-sm text-ink-200/60 mb-6">Tạo tài khoản miễn phí, nạp tiền để bắt đầu dùng API</p>
           {ref && (
             <div className="flex items-center gap-2 mb-5 px-3 py-2 rounded-lg bg-honey-500/10 border border-honey-500/20 text-sm text-honey-200">
               <Gift size={14} className="text-honey-300 shrink-0" />

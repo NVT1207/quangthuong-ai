@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { verifyKey } from "@/lib/api-key";
 import { countTokens, computeCost } from "@/lib/pricing";
 import { callUpstream, readNonStream, UpstreamError, isUpstreamConfigured } from "@/lib/upstream";
+import { checkApiKeyRateLimit, RATE_LIMIT_PER_MIN } from "@/lib/rate-limit";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function err(status: number, message: string, type = "invalid_request_error") {
   return NextResponse.json({ error: { message, type, code: status } }, { status });
@@ -70,6 +74,9 @@ export async function POST(req: Request) {
   if (!key) return err(401, "Invalid API key", "authentication_error");
   if (key.user.status === "BANNED") return err(403, "Account banned", "permission_error");
   if (!model || !model.active) return err(404, `Model '${modelSlug}' not found`, "not_found_error");
+
+  const rl = await checkApiKeyRateLimit(key.id);
+  if (!rl.ok) return err(429, `Rate limit: tối đa ${RATE_LIMIT_PER_MIN} requests/phút/key. Đã dùng ${rl.count}. Đợi 60s rồi thử lại.`, "rate_limit_error");
 
   if (!isUpstreamConfigured()) {
     return err(503, "Upstream chưa cấu hình. Đặt BEEKNOEE_BASE_URL và BEEKNOEE_API_KEY trong .env.", "service_unavailable");
