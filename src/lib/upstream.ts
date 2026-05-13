@@ -69,7 +69,13 @@ export async function readNonStream(res: Response): Promise<{
 }> {
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new UpstreamError(res.status, json?.error?.message || `Upstream lỗi ${res.status}`, json);
+    const safeMsg =
+      res.status === 402 || res.status === 429
+        ? "Insufficient balance."
+        : res.status >= 500
+          ? "Upstream tạm thời không khả dụng. Vui lòng thử lại."
+          : `Yêu cầu bị từ chối (mã ${res.status}).`;
+    throw new UpstreamError(res.status, safeMsg, json);
   }
   const text: string = json?.choices?.[0]?.message?.content ?? "";
   const usage = json?.usage || {};

@@ -112,14 +112,17 @@ export async function POST(req: Request) {
   }
 
   if (!upstream.ok) {
-    const txt = await upstream.text().catch(() => "");
+    await upstream.text().catch(() => "");
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: upstream.status, ip },
     });
-    return new NextResponse(txt || JSON.stringify({ type: "error", error: { type: "api_error", message: `Upstream lỗi ${upstream.status}` } }), {
-      status: upstream.status,
-      headers: { "Content-Type": upstream.headers.get("content-type") || "application/json" },
-    });
+    if (upstream.status === 402 || upstream.status === 429) {
+      return err(upstream.status, "Insufficient balance.", "billing_error");
+    }
+    if (upstream.status >= 500) {
+      return err(502, "Upstream tạm thời không khả dụng. Vui lòng thử lại.", "api_error");
+    }
+    return err(upstream.status, `Yêu cầu bị từ chối (mã ${upstream.status}).`, "api_error");
   }
 
   if (stream && upstream.body) {

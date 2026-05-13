@@ -114,9 +114,15 @@ export async function POST(req: Request) {
       return err(status, e?.message || "Upstream error", "upstream_error");
     }
     if (!upstream.ok || !upstream.body) {
-      const txt = await upstream.text().catch(() => "");
+      await upstream.text().catch(() => "");
       await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: upstream.status, ip });
-      return err(upstream.status, txt || `Upstream lỗi ${upstream.status}`, "upstream_error");
+      if (upstream.status === 402 || upstream.status === 429) {
+        return err(upstream.status, "Insufficient balance.", "billing_error");
+      }
+      if (upstream.status >= 500) {
+        return err(502, "Upstream tạm thời không khả dụng. Vui lòng thử lại.", "upstream_error");
+      }
+      return err(upstream.status, `Yêu cầu bị từ chối (mã ${upstream.status}).`, "upstream_error");
     }
 
     const encoder = new TextEncoder();
