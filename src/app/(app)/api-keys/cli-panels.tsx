@@ -63,7 +63,10 @@ function ClaudeSetup({ keys, models, baseUrl }: Props) {
 
   const selectedKey = keys.find((k) => k.id === keyId);
   const keyDisplay = revealedKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
-  const ready = Boolean(haiku && sonnet && opus && selectedKey);
+  // Claude Code BẮT BUỘC key đầy đủ — nếu không, script sẽ ghi `sk-bee-...XXXX` vào
+  // ~/.claude/settings.json và mọi request đều 401.
+  const hasFullKey = revealedKey.startsWith("sk-bee-") && !revealedKey.includes("...");
+  const ready = Boolean(haiku && sonnet && opus && selectedKey && hasFullKey);
 
   // hide command output when any input changes — force re-click
   useEffect(() => { setShown(false); }, [os, keyId, revealedKey, haiku, sonnet, opus]);
@@ -105,7 +108,13 @@ function ClaudeSetup({ keys, models, baseUrl }: Props) {
           shown={shown}
           onClick={() => setShown(true)}
           cmd={cmd}
-          warningWhenNotReady="Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+          warningWhenNotReady={
+            !haiku || !sonnet || !opus
+              ? "Chọn đầy đủ Haiku / Sonnet / Opus"
+              : !hasFullKey
+                ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào settings.json"
+                : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+          }
           finalCommand="claude"
         />
       </Section>

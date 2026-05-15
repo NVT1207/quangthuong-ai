@@ -28,6 +28,14 @@ export async function GET(req: NextRequest) {
   if (!key || key === "API_KEY_CUA_BAN") {
     return new Response("Missing key\n", { status: 400 });
   }
+  // Chặn key rút gọn (UI sinh "sk-bee-XX...XXXX" khi user chưa dán key đầy đủ).
+  // Phải có key đầy đủ thì script mới ghi đúng vào settings.json + .zshrc.
+  if (key.includes("...") || !/^sk-bee-[A-Za-z0-9_-]{20,}$/.test(key)) {
+    return new Response(
+      "API key không hợp lệ. Hãy dán key ĐẦY ĐỦ (sk-bee-...) — không dùng dạng rút gọn.\n",
+      { status: 400 },
+    );
+  }
 
   const isWindows = os === "windows" || os === "win";
   const body = isWindows
