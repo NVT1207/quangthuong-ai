@@ -61,6 +61,9 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
     if (!r.ok) { alert(data.error || "Lỗi"); return; }
     setRevealedKey(data.fullKey);
     setKeys([{ ...data.key, enabled: true, totalCost: 0, totalRequests: 0 }, ...keys]);
+    // Auto-reveal key vừa tạo trong list — user thấy ngay full key, không cần bấm 👁.
+    // Reload trang sẽ về dạng ẩn (vì revealed state chỉ in-memory, không persist).
+    setRevealed((prev) => ({ ...prev, [data.key.id]: data.fullKey }));
     setCreating(false);
     setName("");
     router.refresh();
