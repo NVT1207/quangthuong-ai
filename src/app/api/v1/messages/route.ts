@@ -80,7 +80,7 @@ export async function POST(req: Request) {
   }).join("\n");
   const estInputTokens = countTokens(sysText + "\n" + msgText);
   const discountField = tierDiscountField((key.user.tier as Tier) ?? "FREE");
-  const discount = ((model as any)[discountField] as number | undefined) ?? 0;
+  const discount = discountField ? ((model as any)[discountField] as number | undefined) ?? 0 : 0;
   const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice, discount);
   if (key.user.balance < minCost) {
     await prisma.usageLog.create({

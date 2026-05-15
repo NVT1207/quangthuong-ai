@@ -92,7 +92,7 @@ export async function POST(req: Request) {
   const estInputTokens = countTokens(inputText);
 
   const discountField = tierDiscountField((key.user.tier as Tier) ?? "FREE");
-  const discount = ((model as any)[discountField] as number | undefined) ?? 0;
+  const discount = discountField ? ((model as any)[discountField] as number | undefined) ?? 0 : 0;
 
   // Pre-check số dư bằng giá tối thiểu (chỉ input). Đủ tiền mới gọi upstream.
   const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice, discount);

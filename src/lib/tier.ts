@@ -99,8 +99,8 @@ export async function syncUserTier(userId: string) {
 
 export function tierDiscountField(
   tier: Tier
-): "freeDiscount" | "basicDiscount" | "advDiscount" {
-  if (tier === "FREE") return "freeDiscount";
+): "basicDiscount" | "advDiscount" | null {
+  if (tier === "FREE") return null;
   if (tier === "BASIC") return "basicDiscount";
   return "advDiscount";
 }

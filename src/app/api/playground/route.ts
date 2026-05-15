@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   const estInputTokens = countTokens(inputText);
 
   const discountField = tierDiscountField((user?.tier as Tier) ?? "FREE");
-  const discount = ((m as any)[discountField] as number | undefined) ?? 0;
+  const discount = discountField ? ((m as any)[discountField] as number | undefined) ?? 0 : 0;
 
   const minCost = computeCost(estInputTokens, 0, m.inputPrice, m.outputPrice, discount);
   if (user!.balance < minCost) {

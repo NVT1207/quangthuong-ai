@@ -28,8 +28,8 @@ type ModelMeta = {
 
 type Tier = "FREE" | "BASIC" | "ADV" | "ULTRA";
 
-function tierDiscountField(tier: Tier): "freeDiscount" | "basicDiscount" | "advDiscount" {
-  if (tier === "FREE") return "freeDiscount";
+function tierDiscountField(tier: Tier): "basicDiscount" | "advDiscount" | null {
+  if (tier === "FREE") return null;
   if (tier === "BASIC") return "basicDiscount";
   return "advDiscount";
 }
@@ -50,7 +50,7 @@ export function UsageClient({ logs, models, userTier = "FREE" }: { logs: LogItem
     const field = tierDiscountField(userTier);
     return logs.map((l) => {
       const meta = modelMap.get(l.modelSlug);
-      const discount = (meta?.[field] as number | undefined) ?? 0;
+      const discount = field ? (meta?.[field] as number | undefined) ?? 0 : 0;
       const cacheTokens = simulatedCacheTokens(l.id, l.inputTokens);
       const totalTokens = l.inputTokens + l.outputTokens;
       const regularTokens = Math.max(0, totalTokens - cacheTokens);
