@@ -15,6 +15,28 @@ export const maxDuration = 60;
 const BASE_URL = (process.env.BEEKNOEE_BASE_URL || "").replace(/\/+$/, "");
 const API_KEY = process.env.BEEKNOEE_API_KEY || "";
 
+const SAFE_UPSTREAM_ERROR = "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.";
+const SENSITIVE_UPSTREAM_PATTERNS = [
+  "Số dư tài khoản API không đủ",
+  "Chi phí ước tính",
+  "Số dư hiện tại",
+  "platform.beeknoee.com/billing",
+];
+
+function containsSensitiveUpstreamError(text: string) {
+  return SENSITIVE_UPSTREAM_PATTERNS.some((p) => text.includes(p));
+}
+
+function safeAnthropicErrorEvent(status = 502) {
+  return `event: error
+data: ${JSON.stringify({
+    type: "error",
+    error: { type: status === 402 ? "billing_error" : "api_error", message: SAFE_UPSTREAM_ERROR },
+  })}
+
+`;
+}
+
 function err(status: number, message: string, type = "invalid_request_error") {
   return NextResponse.json({ type: "error", error: { type, message } }, { status });
 }
@@ -108,7 +130,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
     });
-    return err(502, `Không kết nối upstream: ${e?.message || e}`, "api_error");
+    return err(502, SAFE_UPSTREAM_ERROR, "api_error");
   }
 
   if (!upstream.ok) {
@@ -129,41 +151,63 @@ export async function POST(req: Request) {
     const decoder = new TextDecoder();
     let inputTokens = estInputTokens;
     let outputTokens = 0;
+    let collectedText = "";
     let buffer = "";
 
+    const encoder = new TextEncoder();
     const out = new ReadableStream({
       async start(controller) {
         const reader = upstream.body!.getReader();
+        const forwardLine = async (line: string) => {
+          if (containsSensitiveUpstreamError(line)) {
+            controller.enqueue(encoder.encode(safeAnthropicErrorEvent(502)));
+            controller.close();
+            await reader.cancel().catch(() => undefined);
+            await prisma.usageLog.create({ data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: 502, ip } });
+            return false;
+          }
+          controller.enqueue(encoder.encode(line + "\n"));
+          const l = line.trim();
+          if (!l.startsWith("data:")) return true;
+          const payload = l.slice(5).trim();
+          if (!payload || payload === "[DONE]") return true;
+          try {
+            const j = JSON.parse(payload);
+            if (j?.type === "content_block_delta") {
+              const deltaText = j?.delta?.text;
+              if (typeof deltaText === "string") collectedText += deltaText;
+            }
+            if (j?.type === "message_start" && j?.message?.usage?.input_tokens != null) {
+              inputTokens = j.message.usage.input_tokens;
+            }
+            if (j?.type === "message_delta") {
+              const usageOutput = j?.usage?.output_tokens;
+              if (usageOutput != null) outputTokens = usageOutput;
+            }
+          } catch { /* ignore */ }
+          return true;
+        };
         try {
           while (true) {
             const { value, done } = await reader.read();
             if (done) break;
-            controller.enqueue(value);
-            buffer += decoder.decode(value, { stream: true });
+            const chunkText = decoder.decode(value, { stream: true });
+            buffer += chunkText;
             const lines = buffer.split("\n");
             buffer = lines.pop() || "";
             for (const line of lines) {
-              const l = line.trim();
-              if (!l.startsWith("data:")) continue;
-              const payload = l.slice(5).trim();
-              if (!payload || payload === "[DONE]") continue;
-              try {
-                const j = JSON.parse(payload);
-                if (j?.type === "message_start" && j?.message?.usage?.input_tokens != null) {
-                  inputTokens = j.message.usage.input_tokens;
-                }
-                if (j?.type === "message_delta" && j?.usage?.output_tokens != null) {
-                  outputTokens = j.usage.output_tokens;
-                }
-              } catch { /* ignore */ }
+              if (!(await forwardLine(line))) return;
             }
           }
+          const tail = buffer + decoder.decode();
+          if (tail && !(await forwardLine(tail))) return;
         } catch (e: any) {
           controller.error(e);
           return;
         }
         controller.close();
 
+        if (outputTokens === 0) outputTokens = countTokens(collectedText);
         const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice, discount);
         const fresh = await prisma.user.findUnique({ where: { id: key.userId } });
         const balance = fresh?.balance ?? key.user.balance;
@@ -193,6 +237,12 @@ export async function POST(req: Request) {
 
   // Non-stream
   const json = await upstream.json().catch(() => null);
+  if (json?.error && containsSensitiveUpstreamError(JSON.stringify(json))) {
+    await prisma.usageLog.create({
+      data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
+    });
+    return err(502, SAFE_UPSTREAM_ERROR, "api_error");
+  }
   if (!json) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
