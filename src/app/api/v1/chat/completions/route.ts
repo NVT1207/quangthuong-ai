@@ -142,15 +142,27 @@ export async function POST(req: Request) {
           while (true) {
             const { value, done } = await reader.read();
             if (done) break;
-            // Forward thẳng chunk gốc cho client
-            controller.enqueue(value);
-
-            // Parse song song để cộng dồn text + bắt usage (nếu upstream gửi)
+            // Không forward raw ngay: upstream có thể trả lỗi dạng SSE 200 và lộ nội dung billing.
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
             buffer = lines.pop() || "";
             for (const line of lines) {
               const l = line.trim();
+              if (
+                l.includes("Số dư tài khoản API không đủ") ||
+                l.includes("Chi phí ước tính") ||
+                l.includes("Số dư hiện tại") ||
+                l.includes("platform.beeknoee.com/billing")
+              ) {
+                controller.enqueue(encoder.encode('data: {"error":{"message":"Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.","type":"upstream_error"}}\n\n'));
+                controller.close();
+                return;
+              }
+
+              // Forward từng dòng đã kiểm tra an toàn cho client.
+              controller.enqueue(encoder.encode(line + "\n"));
+
+              // Parse song song để cộng dồn text + bắt usage (nếu upstream gửi)
               if (!l.startsWith("data:")) continue;
               const payload = l.slice(5).trim();
               if (!payload || payload === "[DONE]") continue;
@@ -235,3 +247,4 @@ export async function POST(req: Request) {
   // Trả nguyên response upstream để client thấy đầy đủ id / system_fingerprint / etc.
   return NextResponse.json(parsed.raw);
 }
+
