@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   const isWindows = os === "windows" || os === "win";
   const body = isWindows
     ? buildPowerShell({ key, small, medium, high, botToken, userId })
-    : buildPosix({ key, os, small, medium, high, botToken, userId });
+    : buildPosix({ key, small, medium, high, botToken, userId });
 
   return new Response(body, {
     status: 200,
@@ -59,11 +59,12 @@ export async function GET(req: NextRequest) {
 
 // ===== POSIX (macOS / Linux) =====
 function buildPosix(opts: {
-  key: string; os: string;
+  key: string;
   small: string; medium: string; high: string;
   botToken: string; userId: string;
 }): string {
-  const isMac = opts.os !== "linux"; // mac default
+  // Cross-platform POSIX script — không phân biệt mac/linux tại server,
+  // restart gateway qua `openclaw daemon restart` (launchd/systemd/schtasks tự xử lý).
   return [
     `#!/bin/sh`,
     `set -e`,
@@ -189,34 +190,27 @@ function buildPosix(opts: {
     `printf '  High       : %s\\n' "$HIGH_MODEL"`,
     `printf '\\n'`,
     ``,
-    isMac
-      ? [
-          `#--- Restart gateway (macOS LaunchAgent) ---`,
-          `printf '%sRestarting gateway...%s\\n' "$BOLD" "$RESET"`,
-          `UID_NUM=$(id -u)`,
-          `if launchctl print "gui/$UID_NUM/ai.openclaw.gateway" >/dev/null 2>&1; then`,
-          `  if launchctl kickstart -k "gui/$UID_NUM/ai.openclaw.gateway" >/dev/null 2>&1; then`,
-          `    printf '  %s✓%s Restarted LaunchAgent: gui/%s/ai.openclaw.gateway\\n' "$GREEN" "$RESET" "$UID_NUM"`,
-          `    printf '  %s✓%s Gateway restarted successfully\\n\\n' "$GREEN" "$RESET"`,
-          `  else`,
-          `    printf '  %s!%s Không restart được LaunchAgent — chạy: %sopenclaw start%s\\n\\n' "$YELLOW" "$RESET" "$YELLOW" "$RESET"`,
-          `  fi`,
-          `else`,
-          `  printf '  %s-%s LaunchAgent chưa cài — chạy: %sopenclaw start%s\\n\\n' "$DIM" "$RESET" "$YELLOW" "$RESET"`,
-          `fi`,
-        ].join("\n")
-      : [
-          `#--- Linux: không có LaunchAgent ---`,
-          `printf '%sKhởi động gateway:%s %sopenclaw start%s\\n\\n' "$BOLD" "$RESET" "$YELLOW" "$RESET"`,
-        ].join("\n"),
+    `#--- Restart gateway (qua openclaw daemon — cross-platform: launchd/systemd/schtasks) ---`,
+    `printf '%sRestarting gateway...%s\\n' "$BOLD" "$RESET"`,
+    `if command -v openclaw >/dev/null 2>&1; then`,
+    `  if openclaw daemon restart >/dev/null 2>&1; then`,
+    `    printf '  %s✓%s Gateway restarted (openclaw daemon restart)\\n\\n' "$GREEN" "$RESET"`,
+    `  elif openclaw daemon start >/dev/null 2>&1; then`,
+    `    printf '  %s✓%s Gateway started (openclaw daemon start)\\n\\n' "$GREEN" "$RESET"`,
+    `  else`,
+    `    printf '  %s!%s Không restart tự động được — chạy: %sopenclaw daemon status%s để chẩn đoán\\n\\n' "$YELLOW" "$RESET" "$YELLOW" "$RESET"`,
+    `  fi`,
+    `else`,
+    `  printf '  %s-%s openclaw CLI chưa có trong PATH — cài qua: %scurl -fsSL https://openclaw.ai/install.sh | bash%s\\n\\n' "$DIM" "$RESET" "$YELLOW" "$RESET"`,
+    `fi`,
     ``,
     `printf '%sNext steps:%s\\n' "$BOLD" "$RESET"`,
     `if [ -n "$BOT_TOKEN" ] && [ -n "$TG_USER_ID" ]; then`,
     `  printf '  1. Mở Telegram và nhắn cho bot của bạn\\n'`,
-    `  printf '  2. Nếu chưa chạy: %sopenclaw start%s\\n' "$YELLOW" "$RESET"`,
+    `  printf '  2. Nếu chưa chạy: %sopenclaw daemon start%s\\n' "$YELLOW" "$RESET"`,
     `else`,
     `  printf '  1. Bổ sung Bot Token & User ID trong %s nếu chưa có\\n' "$CONFIG_FILE"`,
-    `  printf '  2. Chạy: %sopenclaw start%s\\n' "$YELLOW" "$RESET"`,
+    `  printf '  2. Chạy: %sopenclaw daemon start%s\\n' "$YELLOW" "$RESET"`,
     `fi`,
     `printf '\\n'`,
     `printf '%sDocumentation:%s %s\\n' "$DIM" "$RESET" "$DOCS_URL"`,
@@ -298,15 +292,24 @@ function buildPowerShell(opts: {
     `Write-Host "  Medium     : $Medium"`,
     `Write-Host "  High       : $High"`,
     `Write-Host ""`,
-    `Write-Host "Khởi động gateway: openclaw start" -ForegroundColor Yellow`,
+    `Write-Host "Restarting gateway..." -ForegroundColor White`,
+    `if (Get-Command openclaw -ErrorAction SilentlyContinue) {`,
+    `  try { openclaw daemon restart 2>$null | Out-Null; Write-Host "  [OK] Gateway restarted (openclaw daemon restart)" -ForegroundColor Green }`,
+    `  catch {`,
+    `    try { openclaw daemon start 2>$null | Out-Null; Write-Host "  [OK] Gateway started (openclaw daemon start)" -ForegroundColor Green }`,
+    `    catch { Write-Host "  [!] Không restart được — chạy: openclaw daemon status" -ForegroundColor Yellow }`,
+    `  }`,
+    `} else {`,
+    `  Write-Host "  [-] openclaw CLI chưa có — cài qua: irm https://openclaw.ai/install.ps1 | iex" -ForegroundColor DarkGray`,
+    `}`,
     `Write-Host ""`,
     `Write-Host "Next steps:"`,
     `if ($BotToken -and $TgUserId) {`,
     `  Write-Host "  1. Mở Telegram và nhắn cho bot của bạn"`,
-    `  Write-Host "  2. Nếu chưa chạy: openclaw start"`,
+    `  Write-Host "  2. Nếu chưa chạy: openclaw daemon start"`,
     `} else {`,
     `  Write-Host "  1. Bổ sung Bot Token & User ID trong $configFile nếu chưa có"`,
-    `  Write-Host "  2. Chạy: openclaw start"`,
+    `  Write-Host "  2. Chạy: openclaw daemon start"`,
     `}`,
     `Write-Host ""`,
     `Write-Host "Documentation: $DocsUrl" -ForegroundColor DarkGray`,

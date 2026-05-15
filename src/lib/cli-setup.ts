@@ -14,7 +14,8 @@ export const OPENCLAW_INSTALL = {
 };
 
 function osParam(os: OsTarget) {
-  return os === "unix" ? "linux" : "windows";
+  // POSIX script tự detect macOS/Linux qua `uname -s` → server không cần phân biệt.
+  return os === "unix" ? "unix" : "windows";
 }
 
 function wrap(baseUrl: string, path: string, params: Record<string, string>, os: OsTarget): string {
