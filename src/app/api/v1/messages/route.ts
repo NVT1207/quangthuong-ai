@@ -16,6 +16,7 @@ const BASE_URL = (process.env.BEEKNOEE_BASE_URL || "").replace(/\/+$/, "");
 const API_KEY = process.env.BEEKNOEE_API_KEY || "";
 
 const SAFE_UPSTREAM_ERROR = "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.";
+const SAFE_UPSTREAM_STATUS = 503;
 const SENSITIVE_UPSTREAM_PATTERNS = [
   "Số dư tài khoản API không đủ",
   "Chi phí ước tính",
@@ -31,7 +32,7 @@ function safeAnthropicErrorEvent(status = 502) {
   return `event: error
 data: ${JSON.stringify({
     type: "error",
-    error: { type: status === 402 ? "billing_error" : "api_error", message: SAFE_UPSTREAM_ERROR },
+    error: { type: "api_error", message: SAFE_UPSTREAM_ERROR },
   })}
 
 `;
@@ -108,7 +109,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip },
     });
-    return err(402, "Insufficient balance.", "billing_error");
+    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
   }
 
   // Forward to upstream /messages
@@ -130,7 +131,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
     });
-    return err(502, SAFE_UPSTREAM_ERROR, "api_error");
+    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
   }
 
   if (!upstream.ok) {
@@ -139,7 +140,7 @@ export async function POST(req: Request) {
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: upstream.status, ip },
     });
     if (upstream.status === 402 || upstream.status === 429) {
-      return err(upstream.status, "Insufficient balance.", "billing_error");
+      return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
     }
     if (upstream.status >= 500) {
       return err(502, "Upstream tạm thời không khả dụng. Vui lòng thử lại.", "api_error");
@@ -160,10 +161,10 @@ export async function POST(req: Request) {
         const reader = upstream.body!.getReader();
         const forwardLine = async (line: string) => {
           if (containsSensitiveUpstreamError(line)) {
-            controller.enqueue(encoder.encode(safeAnthropicErrorEvent(502)));
+            controller.enqueue(encoder.encode(safeAnthropicErrorEvent(SAFE_UPSTREAM_STATUS)));
             controller.close();
             await reader.cancel().catch(() => undefined);
-            await prisma.usageLog.create({ data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: 502, ip } });
+            await prisma.usageLog.create({ data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: SAFE_UPSTREAM_STATUS, ip } });
             return false;
           }
           controller.enqueue(encoder.encode(line + "\n"));
@@ -241,7 +242,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
     });
-    return err(502, SAFE_UPSTREAM_ERROR, "api_error");
+    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
   }
   if (!json) {
     await prisma.usageLog.create({
@@ -259,7 +260,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: 402, ip },
     });
-    return err(402, "Insufficient balance.", "billing_error");
+    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
   }
   const newBalance = balance - cost;
   await prisma.$transaction([
@@ -271,3 +272,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json(json);
 }
+
