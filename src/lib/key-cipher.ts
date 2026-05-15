@@ -8,16 +8,43 @@ const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
 const TAG_LEN = 16;
 
-function getKey(): Buffer {
+export type CipherStatus =
+  | { ok: true }
+  | { ok: false; reason: "missing" }
+  | { ok: false; reason: "invalid_length"; got: number }
+  | { ok: false; reason: "invalid_base64" };
+
+export function getCipherStatus(): CipherStatus {
   const raw = process.env.KEY_ENCRYPTION_KEY;
-  if (!raw) {
-    throw new Error("KEY_ENCRYPTION_KEY chưa cấu hình. Thêm 32 bytes base64 vào env.");
+  if (!raw || !raw.trim()) return { ok: false, reason: "missing" };
+  // Vercel UI thi thoảng dán kèm whitespace/newline → trim trước khi decode.
+  const trimmed = raw.trim();
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(trimmed, "base64");
+  } catch {
+    return { ok: false, reason: "invalid_base64" };
   }
-  const buf = Buffer.from(raw, "base64");
-  if (buf.length !== 32) {
-    throw new Error(`KEY_ENCRYPTION_KEY phải là 32 bytes (256-bit) base64, hiện ${buf.length} bytes.`);
+  // Buffer.from(base64) silently nuốt ký tự lạ. Check round-trip để bắt format sai.
+  if (buf.toString("base64").replace(/=+$/, "") !== trimmed.replace(/=+$/, "")) {
+    return { ok: false, reason: "invalid_base64" };
   }
-  return buf;
+  if (buf.length !== 32) return { ok: false, reason: "invalid_length", got: buf.length };
+  return { ok: true };
+}
+
+function getKey(): Buffer {
+  const status = getCipherStatus();
+  if (!status.ok) {
+    if (status.reason === "missing") {
+      throw new Error("KEY_ENCRYPTION_KEY chưa được set trong env.");
+    }
+    if (status.reason === "invalid_base64") {
+      throw new Error("KEY_ENCRYPTION_KEY không phải base64 hợp lệ. Sinh lại bằng: openssl rand -base64 32");
+    }
+    throw new Error(`KEY_ENCRYPTION_KEY phải là 32 bytes (256-bit) base64, hiện ${status.got} bytes. Sinh lại bằng: openssl rand -base64 32`);
+  }
+  return Buffer.from((process.env.KEY_ENCRYPTION_KEY as string).trim(), "base64");
 }
 
 export function encryptKey(plaintext: string): string {
@@ -45,10 +72,5 @@ export function decryptKey(ciphertextB64: string): string {
 }
 
 export function isCipherConfigured(): boolean {
-  try {
-    getKey();
-    return true;
-  } catch {
-    return false;
-  }
+  return getCipherStatus().ok;
 }
