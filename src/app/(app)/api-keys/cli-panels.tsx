@@ -14,16 +14,16 @@ import {
 export type KeyItem = { id: string; name: string; prefix: string; suffix: string };
 export type ModelOpt = { slug: string; displayName: string; provider: string };
 
-type Props = { keys: KeyItem[]; models: ModelOpt[]; baseUrl: string };
+type Props = { keys: KeyItem[]; models: ModelOpt[]; baseUrl: string; revealed?: Record<string, string> };
 
-export function CliPanels({ keys, models, baseUrl }: Props) {
+export function CliPanels({ keys, models, baseUrl, revealed }: Props) {
   return (
     <div className="space-y-4">
       <Card title="Cài đặt Claude Code" subtitle="Cài đặt 1 lệnh" icon={<Terminal size={18} className="text-orange-300" />}>
-        <ClaudeSetup keys={keys} models={models} baseUrl={baseUrl} />
+        <ClaudeSetup keys={keys} models={models} baseUrl={baseUrl} revealed={revealed} />
       </Card>
       <Card title="Cài đặt OpenClaw" subtitle="Cài đặt 1 lệnh" icon={<Bot size={18} className="text-rose-300" />}>
-        <OpenclawSetup keys={keys} models={models} baseUrl={baseUrl} />
+        <OpenclawSetup keys={keys} models={models} baseUrl={baseUrl} revealed={revealed} />
       </Card>
     </div>
   );
@@ -51,7 +51,7 @@ function Card({ title, subtitle, icon, children }: { title: string; subtitle: st
   );
 }
 
-function ClaudeSetup({ keys, models, baseUrl }: Props) {
+function ClaudeSetup({ keys, models, baseUrl, revealed }: Props) {
   const [os, setOs] = useState<OsTarget>("unix");
   const [keyId, setKeyId] = useState<string>(keys[0]?.id ?? "");
   const [haiku, setHaiku] = useState("");
@@ -62,10 +62,13 @@ function ClaudeSetup({ keys, models, baseUrl }: Props) {
   const [shown, setShown] = useState(false);
 
   const selectedKey = keys.find((k) => k.id === keyId);
-  const keyDisplay = revealedKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
+  // Ưu tiên: (1) key user paste tay, (2) key đã reveal ở list. Fallback prefix...suffix chỉ để hiển thị.
+  const autoFullKey = revealed?.[keyId] ?? "";
+  const effectiveKey = revealedKey || autoFullKey;
+  const keyDisplay = effectiveKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
   // Claude Code BẮT BUỘC key đầy đủ — nếu không, script sẽ ghi `sk-bee-...XXXX` vào
   // ~/.claude/settings.json và mọi request đều 401.
-  const hasFullKey = revealedKey.startsWith("sk-bee-") && !revealedKey.includes("...");
+  const hasFullKey = effectiveKey.startsWith("sk-bee-") && !effectiveKey.includes("...");
   const ready = Boolean(haiku && sonnet && opus && selectedKey && hasFullKey);
 
   // hide command output when any input changes — force re-click
@@ -130,7 +133,7 @@ function ClaudeSetup({ keys, models, baseUrl }: Props) {
   );
 }
 
-function OpenclawSetup({ keys, models, baseUrl }: Props) {
+function OpenclawSetup({ keys, models, baseUrl, revealed }: Props) {
   const [os, setOs] = useState<OsTarget>("unix");
   const [keyId, setKeyId] = useState<string>(keys[0]?.id ?? "");
   const [small, setSmall] = useState("");
@@ -143,7 +146,9 @@ function OpenclawSetup({ keys, models, baseUrl }: Props) {
   const [shown, setShown] = useState(false);
 
   const selectedKey = keys.find((k) => k.id === keyId);
-  const keyDisplay = revealedKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
+  const autoFullKey = revealed?.[keyId] ?? "";
+  const effectiveKey = revealedKey || autoFullKey;
+  const keyDisplay = effectiveKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
   const ready = Boolean(small && medium && high && selectedKey);
 
   useEffect(() => { setShown(false); }, [os, keyId, revealedKey, small, medium, high, botToken, userId]);

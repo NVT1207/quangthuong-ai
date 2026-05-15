@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateApiKey, hashKey } from "@/lib/api-key";
+import { encryptKey, isCipherConfigured } from "@/lib/key-cipher";
 import { formatDateTime } from "@/lib/format";
 
 export async function GET() {
@@ -23,8 +24,11 @@ export async function POST(req: Request) {
 
   const { full, prefix, suffix } = generateApiKey();
   const keyHash = await hashKey(full);
+  // Encrypt key để hỗ trợ "Hiện key" sau này. Nếu KEK chưa cấu hình, vẫn cho tạo
+  // (key vẫn được trả lần đầu trong fullKey), chỉ không reveal lại được.
+  const encryptedKey = isCipherConfigured() ? encryptKey(full) : null;
   const key = await prisma.apiKey.create({
-    data: { userId: session.user.id, name: name.trim().slice(0, 80), keyHash, prefix, suffix },
+    data: { userId: session.user.id, name: name.trim().slice(0, 80), keyHash, prefix, suffix, encryptedKey },
   });
   return NextResponse.json({
     fullKey: full,

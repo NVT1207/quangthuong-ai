@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Copy, Check, KeyRound, AlertTriangle, Search, Pencil, Eye } from "lucide-react";
+import { Plus, Trash2, Copy, Check, KeyRound, AlertTriangle, Search, Pencil, Eye, EyeOff, Loader2 } from "lucide-react";
 import { CliPanels, type ModelOpt } from "./cli-panels";
 import { KeyDetailModal } from "./key-detail-modal";
 import { formatUSD, formatNumber } from "@/lib/format";
@@ -37,6 +37,9 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
   const [editName, setEditName] = useState("");
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
   const [detailKeyId, setDetailKeyId] = useState<string | null>(null);
+  // Map keyId → full key plaintext (sau khi reveal). Không persist; tự xoá khi đóng trang.
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+  const [revealing, setRevealing] = useState<string | null>(null);
 
   const filtered = search.trim()
     ? keys.filter(
@@ -105,9 +108,35 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
   }
 
   function copyPrefix(k: Key) {
-    navigator.clipboard.writeText(`${k.prefix}...${k.suffix}`);
+    const text = revealed[k.id] || `${k.prefix}...${k.suffix}`;
+    navigator.clipboard.writeText(text);
     setCopiedKeyId(k.id);
     setTimeout(() => setCopiedKeyId(null), 1200);
+  }
+
+  async function toggleReveal(k: Key) {
+    if (revealed[k.id]) {
+      setRevealed((prev) => {
+        const next = { ...prev };
+        delete next[k.id];
+        return next;
+      });
+      return;
+    }
+    setRevealing(k.id);
+    try {
+      const r = await fetch(`/api/keys/${k.id}/reveal`);
+      const data = await r.json();
+      if (!r.ok) {
+        alert(data.error || "Không hiện được key");
+        return;
+      }
+      setRevealed((prev) => ({ ...prev, [k.id]: data.fullKey }));
+    } catch {
+      alert("Lỗi mạng");
+    } finally {
+      setRevealing(null);
+    }
   }
 
   return (
@@ -212,13 +241,30 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
                       )}
                     </td>
                     <td className="table-td">
-                      <button
-                        onClick={() => copyPrefix(k)}
-                        className="inline-flex items-center gap-1.5 font-mono text-xs px-2.5 py-1 rounded-lg bg-ink-950/60 border border-white/5 hover:border-white/15 transition"
-                      >
-                        {copiedKeyId === k.id ? <Check size={11} className="text-emerald-300" /> : <Copy size={11} className="text-ink-200/40" />}
-                        <span>{k.prefix}...{k.suffix}</span>
-                      </button>
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => copyPrefix(k)}
+                          className="inline-flex items-center gap-1.5 font-mono text-xs px-2.5 py-1 rounded-lg bg-ink-950/60 border border-white/5 hover:border-white/15 transition max-w-[280px]"
+                          title={revealed[k.id] ? "Copy full key" : "Copy prefix"}
+                        >
+                          {copiedKeyId === k.id ? <Check size={11} className="text-emerald-300 shrink-0" /> : <Copy size={11} className="text-ink-200/40 shrink-0" />}
+                          <span className="truncate">
+                            {revealed[k.id] ? revealed[k.id] : `${k.prefix}...${k.suffix}`}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => toggleReveal(k)}
+                          disabled={revealing === k.id}
+                          className="p-1.5 rounded-lg text-ink-200/50 hover:text-ink-100 hover:bg-white/5 transition disabled:opacity-50"
+                          title={revealed[k.id] ? "Ẩn key" : "Hiện full key"}
+                        >
+                          {revealing === k.id
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : revealed[k.id]
+                              ? <EyeOff size={12} />
+                              : <Eye size={12} />}
+                        </button>
+                      </div>
                     </td>
                     <td className="table-td">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-300 border border-sky-500/20 text-xs font-mono">
@@ -264,7 +310,7 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
         )}
       </div>
 
-      <CliPanels keys={keys} models={models} baseUrl={baseUrl} />
+      <CliPanels keys={keys} models={models} baseUrl={baseUrl} revealed={revealed} />
 
       {detailKeyId && (
         <KeyDetailModal keyId={detailKeyId} onClose={() => setDetailKeyId(null)} />

@@ -50,18 +50,19 @@ model Subscription {
 }
 
 model ApiKey {
-  id          String     @id @default(cuid())
-  userId      String
-  name        String
-  keyHash     String     @unique
-  prefix      String
-  suffix      String
-  enabled     Boolean    @default(true)
-  lastUsedAt  DateTime?
-  revokedAt   DateTime?
-  createdAt   DateTime   @default(now())
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  usage       UsageLog[]
+  id            String     @id @default(cuid())
+  userId        String
+  name          String
+  keyHash       String     @unique
+  prefix        String
+  suffix        String
+  encryptedKey  String?    // AES-256-GCM ciphertext của full key (nullable cho key cũ trước khi migrate)
+  enabled       Boolean    @default(true)
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime   @default(now())
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usage         UsageLog[]
 }
 
 model Model {
