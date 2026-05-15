@@ -13,6 +13,10 @@ function err(status: number, message: string, type = "invalid_request_error") {
   return NextResponse.json({ error: { message, type, code: status } }, { status });
 }
 
+function upstreamErr(status: number) {
+  return err(status, "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.", "upstream_error");
+}
+
 async function authenticate(req: Request) {
   const auth = req.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -111,7 +115,7 @@ export async function POST(req: Request) {
     } catch (e: any) {
       const status = e instanceof UpstreamError ? e.status : 502;
       await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status, ip });
-      return err(status, e?.message || "Upstream error", "upstream_error");
+      return upstreamErr(status);
     }
     if (!upstream.ok || !upstream.body) {
       await upstream.text().catch(() => "");
@@ -200,7 +204,7 @@ export async function POST(req: Request) {
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status, ip });
-    return err(status, e?.message || "Upstream error", "upstream_error");
+    return upstreamErr(status);
   }
 
   let parsed;
@@ -209,7 +213,7 @@ export async function POST(req: Request) {
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status, ip });
-    return err(status, e?.message || "Upstream error", "upstream_error");
+    return upstreamErr(status);
   }
 
   const inputTokens = parsed.promptTokens ?? estInputTokens;

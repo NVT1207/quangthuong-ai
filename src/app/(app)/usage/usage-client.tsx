@@ -70,7 +70,7 @@ export function UsageClient({ logs, models, userTier = "FREE" }: { logs: LogItem
         cacheSavings,
       };
     });
-  }, [logs, modelMap]);
+  }, [logs, modelMap, userTier]);
 
   const inRange = useMemo(() => {
     const start = new Date();
