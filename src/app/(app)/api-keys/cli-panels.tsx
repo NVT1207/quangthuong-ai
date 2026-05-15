@@ -149,7 +149,10 @@ function OpenclawSetup({ keys, models, baseUrl, revealed }: Props) {
   const autoFullKey = revealed?.[keyId] ?? "";
   const effectiveKey = revealedKey || autoFullKey;
   const keyDisplay = effectiveKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
-  const ready = Boolean(small && medium && high && selectedKey);
+  // OpenClaw cũng BẮT BUỘC key đầy đủ — script ghi vào ~/.openclaw/openclaw.json,
+  // nếu là dạng "sk-bee-XXXX...YYYY" thì mọi request đều 401.
+  const hasFullKey = effectiveKey.startsWith("sk-bee-") && !effectiveKey.includes("...");
+  const ready = Boolean(small && medium && high && selectedKey && hasFullKey);
 
   useEffect(() => { setShown(false); }, [os, keyId, revealedKey, small, medium, high, botToken, userId]);
 
@@ -215,7 +218,13 @@ function OpenclawSetup({ keys, models, baseUrl, revealed }: Props) {
           shown={shown}
           onClick={() => setShown(true)}
           cmd={cmd}
-          warningWhenNotReady="Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+          warningWhenNotReady={
+            !small || !medium || !high
+              ? "Chọn đầy đủ Small / Medium / High"
+              : !hasFullKey
+                ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào openclaw.json"
+                : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+          }
           finalCommand="openclaw start"
         />
       </Section>
