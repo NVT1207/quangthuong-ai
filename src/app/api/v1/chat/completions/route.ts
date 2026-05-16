@@ -83,8 +83,8 @@ export async function POST(req: Request) {
   const rl = await checkApiKeyRateLimit(key.id);
   if (!rl.ok) return err(429, `Rate limit: tối đa ${RATE_LIMIT_PER_MIN} requests/phút/key. Đã dùng ${rl.count}. Đợi 60s rồi thử lại.`, "rate_limit_error");
 
-  if (!isUpstreamConfigured()) {
-    return err(503, "Upstream chưa cấu hình. Đặt BEEKNOEE_BASE_URL và BEEKNOEE_API_KEY trong .env.", "service_unavailable");
+  if (!(await isUpstreamConfigured())) {
+    return err(503, "Upstream chưa cấu hình. Liên hệ admin để tạo Provider hoặc đặt BEEKNOEE_BASE_URL/API_KEY env.", "service_unavailable");
   }
 
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;

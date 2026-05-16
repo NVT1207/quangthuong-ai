@@ -11,7 +11,11 @@ type M = {
   description: string | null; active: boolean; createdAt: string;
   freeDiscount: number; basicDiscount: number; advDiscount: number;
   speedTps: number; latencyMs: number; uptimeStatus: string;
+  providerId?: string | null;
+  upstreamSlug?: string | null;
 };
+
+type ProviderOpt = { id: string; name: string; type: string };
 
 const CATEGORIES = ["text", "embedding", "image", "video", "tts"] as const;
 const PRICE_UNITS = ["1M tokens", "1 ảnh", "1 giây", "1M ký tự"] as const;
@@ -23,6 +27,7 @@ const blank: Partial<M> = {
   description: "", active: true,
   freeDiscount: 50, basicDiscount: 60, advDiscount: 70,
   speedTps: 0, latencyMs: 0, uptimeStatus: "good",
+  providerId: null, upstreamSlug: "",
 };
 
 const UPTIME_DOT: Record<string, string> = {
@@ -31,7 +36,7 @@ const UPTIME_DOT: Record<string, string> = {
   down: "bg-rose-400",
 };
 
-export function ModelsAdminClient({ initial }: { initial: M[] }) {
+export function ModelsAdminClient({ initial, providers = [] }: { initial: M[]; providers?: ProviderOpt[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
   const [editing, setEditing] = useState<Partial<M> | null>(null);
@@ -102,6 +107,31 @@ export function ModelsAdminClient({ initial }: { initial: M[] }) {
             </div>
             <div><label className="label">Tốc độ (tok/s)</label><input type="number" value={editing.speedTps ?? 0} onChange={(e) => setEditing({ ...editing, speedTps: parseFloat(e.target.value) || 0 })} className="input" /></div>
             <div><label className="label">Latency (ms)</label><input type="number" value={editing.latencyMs ?? 0} onChange={(e) => setEditing({ ...editing, latencyMs: parseFloat(e.target.value) || 0 })} className="input" /></div>
+
+            <div>
+              <label className="label">Upstream Provider</label>
+              <select
+                value={editing.providerId ?? ""}
+                onChange={(e) => setEditing({ ...editing, providerId: e.target.value || null })}
+                className="input"
+              >
+                <option value="">— Env fallback (BEEKNOEE_BASE_URL) —</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.type})</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-ink-200/40 mt-1">Quyết định nguồn upstream + key dùng cho model này.</p>
+            </div>
+            <div>
+              <label className="label">Upstream Slug (tùy chọn)</label>
+              <input
+                value={editing.upstreamSlug ?? ""}
+                onChange={(e) => setEditing({ ...editing, upstreamSlug: e.target.value })}
+                className="input"
+                placeholder="Để trống = dùng Slug"
+              />
+              <p className="text-[10px] text-ink-200/40 mt-1">Tên model thật ở upstream (vd: gpt-4o-mini).</p>
+            </div>
 
             <div className="md:col-span-2"><label className="label">Mô tả</label><textarea value={editing.description || ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} className="input resize-none" rows={2} /></div>
             <div className="md:col-span-2 flex items-center gap-2">

@@ -8,82 +8,121 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  name            String?
-  passwordHash    String
-  balance         Float            @default(0)
-  role            String           @default("USER")
-  status          String           @default("ACTIVE")
-  createdAt       DateTime         @default(now())
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  name                 String?
+  passwordHash         String
+  balance              Float                 @default(0)
+  role                 String                @default("USER")
+  status               String                @default("ACTIVE")
+  createdAt            DateTime              @default(now())
   // Affiliate fields
-  affiliateCode   String?          @unique
-  referredById    String?
+  affiliateCode        String?               @unique
+  referredById         String?
   // Tier subscription
-  tier            String           @default("FREE")   // FREE | BASIC | ADV | ULTRA
-  tierSource      String           @default("AUTO")   // AUTO | PAID
-  tierExpiresAt   DateTime?
-  apiKeys         ApiKey[]
-  topups          TopupRequest[]
-  usage           UsageLog[]
-  transactions    Transaction[]
-  subscriptions   Subscription[]
-  referrals       User[]           @relation("UserReferrals")
-  referredBy      User?            @relation("UserReferrals", fields: [referredById], references: [id])
-  commissions     AffiliateCommission[] @relation("AffiliateEarner")
+  tier                 String                @default("FREE") // FREE | BASIC | ADV | ULTRA
+  tierSource           String                @default("AUTO") // AUTO | PAID
+  tierExpiresAt        DateTime?
+  apiKeys              ApiKey[]
+  topups               TopupRequest[]
+  usage                UsageLog[]
+  transactions         Transaction[]
+  subscriptions        Subscription[]
+  referrals            User[]                @relation("UserReferrals")
+  referredBy           User?                 @relation("UserReferrals", fields: [referredById], references: [id])
+  commissions          AffiliateCommission[] @relation("AffiliateEarner")
   generatedCommissions AffiliateCommission[] @relation("ReferralSource")
 }
 
 model Subscription {
-  id         String   @id @default(cuid())
-  userId     String
-  plan       String                              // BASIC | ADV
-  period     String                              // MONTH | HALF_YEAR | YEAR
-  amount     Float                               // VND đã trừ vào balance lúc mua
-  startedAt  DateTime @default(now())
-  expiresAt  DateTime
-  status     String   @default("ACTIVE")         // ACTIVE | EXPIRED | CANCELLED
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String
+  plan      String // BASIC | ADV
+  period    String // MONTH | HALF_YEAR | YEAR
+  amount    Float // VND đã trừ vào balance lúc mua
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  status    String   @default("ACTIVE") // ACTIVE | EXPIRED | CANCELLED
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
 }
 
 model ApiKey {
-  id            String     @id @default(cuid())
-  userId        String
-  name          String
-  keyHash       String     @unique
-  prefix        String
-  suffix        String
-  encryptedKey  String?    // AES-256-GCM ciphertext của full key (nullable cho key cũ trước khi migrate)
-  enabled       Boolean    @default(true)
-  lastUsedAt    DateTime?
-  revokedAt     DateTime?
-  createdAt     DateTime   @default(now())
-  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  usage         UsageLog[]
+  id           String     @id @default(cuid())
+  userId       String
+  name         String
+  keyHash      String     @unique
+  prefix       String
+  suffix       String
+  encryptedKey String? // AES-256-GCM ciphertext của full key (nullable cho key cũ trước khi migrate)
+  enabled      Boolean    @default(true)
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usage        UsageLog[]
 }
 
 model Model {
-  id             String   @id @default(cuid())
-  slug           String   @unique
-  displayName    String
-  provider       String
-  category       String   @default("text")   // text | embedding | image | video | tts
-  priceUnit      String   @default("1M tokens") // "1M tokens" | "1 ảnh" | "1 giây" | "1M ký tự"
-  inputPrice     Float
-  outputPrice    Float
-  contextLength  Int
-  description    String?
-  active         Boolean  @default(true)
-  freeDiscount   Float    @default(0)
-  basicDiscount  Float    @default(0)
-  advDiscount    Float    @default(0)
-  speedTps       Float    @default(0)
-  latencyMs      Float    @default(0)
-  uptimeStatus   String   @default("good")
-  createdAt      DateTime @default(now())
+  id            String    @id @default(cuid())
+  slug          String    @unique
+  displayName   String
+  provider      String // branding string ("openai/anthropic/...") cho logo display
+  category      String    @default("text") // text | embedding | image | video | tts
+  priceUnit     String    @default("1M tokens") // "1M tokens" | "1 ảnh" | "1 giây" | "1M ký tự"
+  inputPrice    Float
+  outputPrice   Float
+  contextLength Int
+  description   String?
+  active        Boolean   @default(true)
+  freeDiscount  Float     @default(0)
+  basicDiscount Float     @default(0)
+  advDiscount   Float     @default(0)
+  speedTps      Float     @default(0)
+  latencyMs     Float     @default(0)
+  uptimeStatus  String    @default("good")
+  createdAt     DateTime  @default(now())
+  // Multi-provider routing (nullable → env fallback)
+  providerId    String?
+  upstreamSlug  String? // tên model thật ở provider; null → dùng `slug`
+  providerRef   Provider? @relation(fields: [providerId], references: [id])
+
+  @@index([providerId])
+}
+
+// Upstream provider — admin tạo qua /admin/providers
+model Provider {
+  id          String        @id @default(cuid())
+  name        String // "My OpenAI Provider"
+  description String?
+  type        String // OPENAI | ANTHROPIC | GEMINI | OLLAMA | OPENAI_COMPATIBLE
+  baseUrl     String? // null cho OPENAI/ANTHROPIC/GEMINI dùng default endpoint
+  enabled     Boolean       @default(true)
+  routing     String        @default("ROUND_ROBIN") // ROUND_ROBIN | FAILOVER | RANDOM | LEAST_USED
+  rrCursor    Int           @default(0) // pointer cho round-robin
+  createdAt   DateTime      @default(now())
+  keys        ProviderKey[]
+  models      Model[]
+}
+
+model ProviderKey {
+  id            String    @id @default(cuid())
+  providerId    String
+  encryptedKey  String // AES-256-GCM ciphertext (reuse encryptKey() từ key-cipher.ts)
+  prefix        String // 8 ký tự đầu hiển thị UI ("sk-abc1...")
+  label         String? // "Key 1", "Trial"…
+  enabled       Boolean   @default(true)
+  lastUsedAt    DateTime?
+  lastErrorAt   DateTime?
+  errorCount    Int       @default(0) // rolling — reset khi success
+  totalRequests Int       @default(0)
+  totalErrors   Int       @default(0)
+  createdAt     DateTime  @default(now())
+  provider      Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, enabled])
 }
 
 model TopupRequest {
@@ -128,16 +167,16 @@ model UsageLog {
 }
 
 model AffiliateCommission {
-  id            String   @id @default(cuid())
-  earnerId      String                          // ai nhận hoa hồng
-  referredId    String                          // user nào sinh ra giao dịch
-  topupId       String?                         // nguồn topup
-  amount        Float                           // số tiền hoa hồng (VND)
-  rate          Float                           // % áp dụng
-  description   String
-  createdAt     DateTime @default(now())
-  earner        User     @relation("AffiliateEarner", fields: [earnerId], references: [id], onDelete: Cascade)
-  referred      User     @relation("ReferralSource", fields: [referredId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  earnerId    String // ai nhận hoa hồng
+  referredId  String // user nào sinh ra giao dịch
+  topupId     String? // nguồn topup
+  amount      Float // số tiền hoa hồng (VND)
+  rate        Float // % áp dụng
+  description String
+  createdAt   DateTime @default(now())
+  earner      User     @relation("AffiliateEarner", fields: [earnerId], references: [id], onDelete: Cascade)
+  referred    User     @relation("ReferralSource", fields: [referredId], references: [id], onDelete: Cascade)
 }
 
 model BlogPost {
@@ -145,7 +184,7 @@ model BlogPost {
   slug        String   @unique
   title       String
   excerpt     String
-  content     String                            // markdown
+  content     String // markdown
   coverEmoji  String   @default("📝")
   tag         String   @default("Tin tức")
   published   Boolean  @default(true)
@@ -154,11 +193,11 @@ model BlogPost {
 }
 
 model ChangelogEntry {
-  id          String   @id @default(cuid())
-  version     String
-  title       String
-  content     String                            // markdown
-  kind        String   @default("feature")      // feature | fix | improvement
-  releasedAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  version    String
+  title      String
+  content    String // markdown
+  kind       String   @default("feature") // feature | fix | improvement
+  releasedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 }

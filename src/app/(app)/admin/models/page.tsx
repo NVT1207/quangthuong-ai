@@ -9,16 +9,24 @@ export const dynamic = "force-dynamic";
 export default async function AdminModelsPage() {
   const session = await getServerSession(authOptions);
   if (session?.user.role !== "ADMIN") redirect("/dashboard");
-  const models = await prisma.model.findMany({ orderBy: { displayName: "asc" } });
+  const [models, providers] = await Promise.all([
+    prisma.model.findMany({ orderBy: { displayName: "asc" } }),
+    prisma.provider.findMany({
+      where: { enabled: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, type: true },
+    }),
+  ]);
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Quản lý Models</h1>
         <p className="text-sm text-ink-200/60">Thêm/sửa model và bảng giá</p>
       </div>
-      <ModelsAdminClient initial={models.map((m) => ({
-        ...m, createdAt: m.createdAt.toISOString(),
-      }))} />
+      <ModelsAdminClient
+        initial={models.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() }))}
+        providers={providers}
+      />
     </div>
   );
 }

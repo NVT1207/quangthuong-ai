@@ -8,12 +8,16 @@ import { verifyKey } from "@/lib/api-key";
 import { countTokens, computeCost } from "@/lib/pricing";
 import { checkApiKeyRateLimit, RATE_LIMIT_PER_MIN } from "@/lib/rate-limit";
 import { tierDiscountField, type Tier } from "@/lib/tier";
+import {
+  callWithFailover,
+  buildEndpointUrl,
+  authHeaders,
+  isUpstreamConfigured,
+  UpstreamError,
+} from "@/lib/provider-routing";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const BASE_URL = (process.env.BEEKNOEE_BASE_URL || "").replace(/\/+$/, "");
-const API_KEY = process.env.BEEKNOEE_API_KEY || "";
 
 const SAFE_UPSTREAM_ERROR = "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.";
 const SAFE_UPSTREAM_STATUS = 503;
@@ -90,7 +94,7 @@ async function authenticate(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!BASE_URL || !API_KEY) {
+  if (!(await isUpstreamConfigured())) {
     return err(503, "Upstream chưa cấu hình.", "service_unavailable");
   }
 
@@ -142,24 +146,27 @@ export async function POST(req: Request) {
     return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
   }
 
-  // Forward to upstream /messages
-  const url = `${BASE_URL}/messages`;
+  // Forward to upstream /messages via multi-provider routing + auto failover
   let upstream: Response;
   try {
-    upstream = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${API_KEY}`,
-        "x-api-key": API_KEY,
-        "anthropic-version": req.headers.get("anthropic-version") || "2023-06-01",
-        "anthropic-beta": req.headers.get("anthropic-beta") || "",
-      },
-      body: JSON.stringify(body),
+    const result = await callWithFailover(modelSlug, "messages", async (u) => {
+      const url = buildEndpointUrl(u.providerType, u.baseUrl, "messages");
+      return fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(u.providerType, u.apiKey),
+          "anthropic-version": req.headers.get("anthropic-version") || "2023-06-01",
+          "anthropic-beta": req.headers.get("anthropic-beta") || "",
+        },
+        body: JSON.stringify({ ...body, model: u.upstreamModelSlug }),
+      });
     });
+    upstream = result.res;
   } catch (e: any) {
+    const status = e instanceof UpstreamError ? e.status : 502;
     await prisma.usageLog.create({
-      data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
+      data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status, ip },
     });
     return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
   }

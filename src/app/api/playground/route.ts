@@ -20,8 +20,8 @@ export async function POST(req: Request) {
   ]);
   if (!m || !m.active) return NextResponse.json({ error: "Model không tồn tại hoặc đang tắt" }, { status: 404 });
   if (!key) return NextResponse.json({ error: "Bạn cần ít nhất 1 API key" }, { status: 400 });
-  if (!isUpstreamConfigured()) {
-    return NextResponse.json({ error: "Upstream chưa cấu hình. Đặt BEEKNOEE_BASE_URL và BEEKNOEE_API_KEY trong .env." }, { status: 503 });
+  if (!(await isUpstreamConfigured())) {
+    return NextResponse.json({ error: "Upstream chưa cấu hình. Liên hệ admin để tạo Provider hoặc đặt BEEKNOEE_BASE_URL/API_KEY env." }, { status: 503 });
   }
 
   const inputText = messages.map((x: any) => x.content || "").join("\n");

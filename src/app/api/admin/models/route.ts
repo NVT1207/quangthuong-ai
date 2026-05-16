@@ -35,6 +35,8 @@ export async function POST(req: Request) {
         speedTps: Number(b.speedTps) || 0,
         latencyMs: Number(b.latencyMs) || 0,
         uptimeStatus: uptime,
+        providerId: b.providerId ? String(b.providerId) : null,
+        upstreamSlug: b.upstreamSlug ? String(b.upstreamSlug).trim() : null,
       },
     });
     return NextResponse.json(m);

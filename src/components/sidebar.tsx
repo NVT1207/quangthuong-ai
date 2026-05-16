@@ -5,7 +5,7 @@ import { signOut } from "next-auth/react";
 import {
   LayoutDashboard, Cpu, Video, ImageIcon, Volume2, MessageSquareText,
   KeyRound, Activity, Wallet, Users2, BookOpen, Bell, FileText,
-  Settings, LogOut, Shield, Boxes, ListChecks, Receipt,
+  Settings, LogOut, Shield, Boxes, ListChecks, Receipt, Network,
 } from "lucide-react";
 import { Logo } from "./logo";
 import { cn } from "@/lib/cn";
@@ -55,6 +55,7 @@ const adminLinks: Item[] = [
   { href: "/admin", label: "Admin Overview", icon: Shield },
   { href: "/admin/users", label: "Người dùng", icon: Users2 },
   { href: "/admin/models", label: "Quản lý Model", icon: Boxes },
+  { href: "/admin/providers", label: "Providers / Keys", icon: Network },
   { href: "/admin/topups", label: "Duyệt nạp tiền", icon: ListChecks },
   { href: "/admin/logs", label: "Logs hệ thống", icon: Receipt },
 ];

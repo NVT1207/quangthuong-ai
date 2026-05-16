@@ -24,6 +24,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (b.speedTps !== undefined) data.speedTps = Number(b.speedTps) || 0;
   if (b.latencyMs !== undefined) data.latencyMs = Number(b.latencyMs) || 0;
   if (b.uptimeStatus !== undefined && ["good", "warn", "down"].includes(b.uptimeStatus)) data.uptimeStatus = b.uptimeStatus;
+  if (b.providerId !== undefined) data.providerId = b.providerId ? String(b.providerId) : null;
+  if (b.upstreamSlug !== undefined) data.upstreamSlug = b.upstreamSlug ? String(b.upstreamSlug).trim() : null;
   const m = await prisma.model.update({ where: { id: params.id }, data });
   return NextResponse.json(m);
 }
