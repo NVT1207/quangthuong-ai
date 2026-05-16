@@ -111,6 +111,9 @@ export function ModelsAdminClient({ initial, providers = [] }: { initial: M[]; p
 
   async function save() {
     if (!editing) return;
+    // Validate Model fields trước
+    if (!editing.slug?.trim()) { alert("Thiếu Slug của model (vd: gpt-4o-mini)"); return; }
+    if (!editing.displayName?.trim()) { alert("Thiếu Tên hiển thị của model"); return; }
     setLoading(true);
     // Build payload
     const payload: any = { ...editing };
