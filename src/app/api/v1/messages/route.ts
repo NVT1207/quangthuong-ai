@@ -28,14 +28,44 @@ function containsSensitiveUpstreamError(text: string) {
   return SENSITIVE_UPSTREAM_PATTERNS.some((p) => text.includes(p));
 }
 
-function safeAnthropicErrorEvent(status = 502) {
-  return `event: error
-data: ${JSON.stringify({
-    type: "error",
-    error: { type: "api_error", message: SAFE_UPSTREAM_ERROR },
-  })}
+function safeAnthropicMessage(model: string, inputTokens = 0) {
+  return {
+    id: `msg_safe_${Date.now()}`,
+    type: "message",
+    role: "assistant",
+    model,
+    content: [{ type: "text", text: SAFE_UPSTREAM_ERROR }],
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: { input_tokens: inputTokens, output_tokens: countTokens(SAFE_UPSTREAM_ERROR) },
+  };
+}
 
-`;
+function safeAnthropicStream(model: string, inputTokens = 0) {
+  const outputTokens = countTokens(SAFE_UPSTREAM_ERROR);
+  const events = [
+    ["message_start", safeAnthropicMessage(model, inputTokens)],
+    ["content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }],
+    ["content_block_delta", { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: SAFE_UPSTREAM_ERROR } }],
+    ["content_block_stop", { type: "content_block_stop", index: 0 }],
+    ["message_delta", { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: outputTokens } }],
+    ["message_stop", { type: "message_stop" }],
+  ];
+  return events.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n`).join("\n") + "\n";
+}
+
+function safeAnthropicResponse(model: string, inputTokens = 0, stream = false) {
+  if (stream) {
+    return new Response(safeAnthropicStream(model, inputTokens), {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
+  }
+  return NextResponse.json(safeAnthropicMessage(model, inputTokens), { status: 200 });
 }
 
 function err(status: number, message: string, type = "invalid_request_error") {
@@ -109,7 +139,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip },
     });
-    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
+    return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
   }
 
   // Forward to upstream /messages
@@ -131,7 +161,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
     });
-    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
+    return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
   }
 
   if (!upstream.ok) {
@@ -140,7 +170,7 @@ export async function POST(req: Request) {
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: upstream.status, ip },
     });
     if (upstream.status === 402 || upstream.status === 429) {
-      return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
+      return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
     }
     if (upstream.status >= 500) {
       return err(502, "Upstream tạm thời không khả dụng. Vui lòng thử lại.", "api_error");
@@ -161,7 +191,7 @@ export async function POST(req: Request) {
         const reader = upstream.body!.getReader();
         const forwardLine = async (line: string) => {
           if (containsSensitiveUpstreamError(line)) {
-            controller.enqueue(encoder.encode(safeAnthropicErrorEvent(SAFE_UPSTREAM_STATUS)));
+            controller.enqueue(encoder.encode(safeAnthropicStream(modelSlug, inputTokens)));
             controller.close();
             await reader.cancel().catch(() => undefined);
             await prisma.usageLog.create({ data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: SAFE_UPSTREAM_STATUS, ip } });
@@ -242,7 +272,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 502, ip },
     });
-    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
+    return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
   }
   if (!json) {
     await prisma.usageLog.create({
@@ -260,7 +290,7 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: 402, ip },
     });
-    return err(SAFE_UPSTREAM_STATUS, SAFE_UPSTREAM_ERROR, "api_error");
+    return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
   }
   const newBalance = balance - cost;
   await prisma.$transaction([
@@ -272,4 +302,5 @@ export async function POST(req: Request) {
 
   return NextResponse.json(json);
 }
+
 
