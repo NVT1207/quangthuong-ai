@@ -93,6 +93,17 @@ const UPTIME_DOT: Record<string, string> = {
   down: "bg-rose-400",
 };
 
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
 export function ModelsAdminClient({ initial, providers = [] }: { initial: M[]; providers?: ProviderOpt[] }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
@@ -112,11 +123,16 @@ export function ModelsAdminClient({ initial, providers = [] }: { initial: M[]; p
   async function save() {
     if (!editing) return;
     // Validate Model fields trước
-    if (!editing.slug?.trim()) { alert("Thiếu Slug của model (vd: gpt-4o-mini)"); return; }
     if (!editing.displayName?.trim()) { alert("Thiếu Tên hiển thị của model"); return; }
+    // Auto-gen slug nếu chưa có
+    let finalSlug = editing.slug?.trim();
+    if (!finalSlug) {
+      finalSlug = slugify(editing.displayName);
+      if (!finalSlug) { alert("Tên hiển thị không hợp lệ để tạo slug"); return; }
+    }
     setLoading(true);
     // Build payload
-    const payload: any = { ...editing };
+    const payload: any = { ...editing, slug: finalSlug };
     if (editing.providerMode === "new" && editing.newProvider) {
       const np = editing.newProvider;
       if (!np.name.trim()) { setLoading(false); alert("Provider thiếu tên"); return; }
@@ -196,8 +212,11 @@ export function ModelsAdminClient({ initial, providers = [] }: { initial: M[]; p
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-200/40 font-semibold mb-2">Thông tin model</p>
             <div className="grid md:grid-cols-2 gap-4">
-              <div><label className="label">Slug (unique)</label><input value={editing.slug || ""} onChange={(e) => setEditing({ ...editing, slug: e.target.value })} className="input" placeholder="claude-sonnet-4.6" /></div>
-              <div><label className="label">Tên hiển thị</label><input value={editing.displayName || ""} onChange={(e) => setEditing({ ...editing, displayName: e.target.value })} className="input" placeholder="Claude Sonnet 4.6" /></div>
+              <div><label className="label">Tên hiển thị <span className="text-rose-400">*</span></label><input value={editing.displayName || ""} onChange={(e) => setEditing({ ...editing, displayName: e.target.value })} className="input" placeholder="Claude Sonnet 4.6" /></div>
+              <div>
+                <label className="label">Slug <span className="text-ink-200/40 text-[10px]">(tự tạo từ Tên nếu bỏ trống)</span></label>
+                <input value={editing.slug || ""} onChange={(e) => setEditing({ ...editing, slug: e.target.value })} className="input font-mono text-xs" placeholder={editing.displayName ? slugify(editing.displayName) : "vd: claude-sonnet-4.6"} />
+              </div>
               <div><label className="label">Provider (branding)</label>
                 <select value={editing.provider || ""} onChange={(e) => setEditing({ ...editing, provider: e.target.value })} className="input">
                   {["openai", "anthropic", "google", "deepseek", "grok", "meta", "mistral", "other"].map((p) => <option key={p} value={p}>{p}</option>)}
