@@ -63,9 +63,26 @@ export function ModelsAdminClient({ initial, providers = [] }: { initial: M[]; p
     if (r.ok) { setItems(items.filter((m) => m.id !== id)); router.refresh(); }
   }
 
+  async function delAll() {
+    const c1 = prompt(`Sẽ xóa TẤT CẢ ${items.length} model. UsageLog cũ vẫn giữ.\n\nGõ "XOA TAT CA" để xác nhận:`);
+    if (c1 !== "XOA TAT CA") return;
+    if (!confirm(`Chắc chắn xóa ${items.length} model? Không thể khôi phục.`)) return;
+    const r = await fetch("/api/admin/models?all=1", { method: "DELETE" });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || "Lỗi"); return; }
+    const d = await r.json();
+    setItems([]);
+    router.refresh();
+    alert(`Đã xóa ${d.deleted} model.`);
+  }
+
   return (
     <>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {items.length > 0 && (
+          <button onClick={delAll} className="btn btn-danger">
+            <Trash2 size={14} /> Xóa tất cả ({items.length})
+          </button>
+        )}
         <button onClick={() => setEditing(blank)} className="btn btn-primary"><Plus size={14} /> Thêm model</button>
       </div>
 

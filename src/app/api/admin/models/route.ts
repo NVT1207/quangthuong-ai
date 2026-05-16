@@ -7,6 +7,18 @@ const ALLOWED_PROVIDERS = ["openai", "anthropic", "google", "deepseek", "grok", 
 const ALLOWED_UPTIME = ["good", "warn", "down"];
 const ALLOWED_CATEGORIES = ["text", "embedding", "image", "video", "tts"];
 
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (session?.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const url = new URL(req.url);
+  if (url.searchParams.get("all") !== "1") {
+    return NextResponse.json({ error: "Thiếu ?all=1 để xác nhận bulk delete" }, { status: 400 });
+  }
+  // UsageLog dùng modelSlug (string), không FK → an toàn xóa Model.
+  const r = await prisma.model.deleteMany({});
+  return NextResponse.json({ ok: true, deleted: r.count });
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (session?.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
