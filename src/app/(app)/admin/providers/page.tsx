@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { decryptKey } from "@/lib/key-cipher";
 import { ProvidersClient } from "./providers-client";
 
 export const dynamic = "force-dynamic";
@@ -13,14 +14,7 @@ export default async function AdminProvidersPage() {
   const providers = await prisma.provider.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      keys: {
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true, prefix: true, label: true, enabled: true,
-          lastUsedAt: true, lastErrorAt: true, errorCount: true,
-          totalRequests: true, totalErrors: true, createdAt: true,
-        },
-      },
+      keys: { orderBy: { createdAt: "asc" } },
       _count: { select: { models: true } },
     },
   });
@@ -38,12 +32,23 @@ export default async function AdminProvidersPage() {
           ...p,
           createdAt: p.createdAt.toISOString(),
           modelsCount: p._count.models,
-          keys: p.keys.map((k) => ({
-            ...k,
-            createdAt: k.createdAt.toISOString(),
-            lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
-            lastErrorAt: k.lastErrorAt?.toISOString() ?? null,
-          })),
+          keys: p.keys.map((k) => {
+            let plainKey = "";
+            try { plainKey = decryptKey(k.encryptedKey); } catch { plainKey = ""; }
+            return {
+              id: k.id,
+              prefix: k.prefix,
+              label: k.label,
+              enabled: k.enabled,
+              lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
+              lastErrorAt: k.lastErrorAt?.toISOString() ?? null,
+              errorCount: k.errorCount,
+              totalRequests: k.totalRequests,
+              totalErrors: k.totalErrors,
+              createdAt: k.createdAt.toISOString(),
+              plainKey,
+            };
+          }),
         }))}
       />
     </div>

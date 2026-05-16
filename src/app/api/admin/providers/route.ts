@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { encryptKey, isCipherConfigured } from "@/lib/key-cipher";
+import { encryptKey, decryptKey, isCipherConfigured } from "@/lib/key-cipher";
 
 const ALLOWED_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
 const ALLOWED_ROUTING = ["ROUND_ROBIN", "FAILOVER", "RANDOM", "LEAST_USED"];
@@ -15,16 +15,32 @@ export async function GET() {
     include: {
       keys: {
         orderBy: { createdAt: "asc" },
-        select: {
-          id: true, prefix: true, label: true, enabled: true,
-          lastUsedAt: true, lastErrorAt: true, errorCount: true,
-          totalRequests: true, totalErrors: true, createdAt: true,
-        },
       },
       _count: { select: { models: true } },
     },
   });
-  return NextResponse.json(providers);
+  // Decrypt key plaintext cho admin UI (theo yêu cầu: show full key cho admin)
+  const out = providers.map((p) => ({
+    ...p,
+    keys: p.keys.map((k) => {
+      let plainKey = "";
+      try { plainKey = decryptKey(k.encryptedKey); } catch { plainKey = ""; }
+      return {
+        id: k.id,
+        prefix: k.prefix,
+        label: k.label,
+        enabled: k.enabled,
+        lastUsedAt: k.lastUsedAt,
+        lastErrorAt: k.lastErrorAt,
+        errorCount: k.errorCount,
+        totalRequests: k.totalRequests,
+        totalErrors: k.totalErrors,
+        createdAt: k.createdAt,
+        plainKey, // ⚠️ chỉ admin
+      };
+    }),
+  }));
+  return NextResponse.json(out);
 }
 
 export async function POST(req: Request) {

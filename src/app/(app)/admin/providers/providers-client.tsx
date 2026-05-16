@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Edit, Trash2, X, Loader2, Eye, EyeOff, Network,
+  Plus, Edit, Trash2, X, Loader2, Network, Copy,
   CheckCircle2, AlertTriangle, RefreshCw, Key as KeyIcon, ChevronDown, ChevronRight,
 } from "lucide-react";
 
@@ -17,6 +17,7 @@ type ProviderKey = {
   totalRequests: number;
   totalErrors: number;
   createdAt: string;
+  plainKey?: string;
 };
 
 type Provider = {
@@ -79,16 +80,13 @@ export function ProvidersClient({ initial }: { initial: Provider[] }) {
   const [items, setItems] = useState<Provider[]>(initial);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showKey, setShowKey] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [addingKeyTo, setAddingKeyTo] = useState<string | null>(null);
   const [newKey, setNewKey] = useState("");
   const [newKeyLabel, setNewKeyLabel] = useState("");
-  const [showNewKey, setShowNewKey] = useState(false);
 
   function startCreate() {
     setEditing({ ...blank });
-    setShowKey({});
   }
   function startEdit(p: Provider) {
     setEditing({
@@ -211,7 +209,7 @@ export function ProvidersClient({ initial }: { initial: Provider[] }) {
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || "Lỗi"); return; }
     setAddingKeyTo(null);
-    setNewKey(""); setNewKeyLabel(""); setShowNewKey(false);
+    setNewKey(""); setNewKeyLabel("");
     router.refresh();
     // refetch để có lại key list
     const list = await fetch("/api/admin/providers");
@@ -335,25 +333,16 @@ export function ProvidersClient({ initial }: { initial: Provider[] }) {
                 <div className="space-y-2">
                   {editing.keys.map((k, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <input
-                          type={showKey[i] ? "text" : "password"}
-                          value={k}
-                          onChange={(e) => {
-                            const next = [...editing.keys]; next[i] = e.target.value;
-                            setEditing({ ...editing, keys: next });
-                          }}
-                          className="input pr-9"
-                          placeholder="sk-..."
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowKey({ ...showKey, [i]: !showKey[i] })}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-200/40 hover:text-ink-200/80"
-                        >
-                          {showKey[i] ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
+                      <input
+                        type="text"
+                        value={k}
+                        onChange={(e) => {
+                          const next = [...editing.keys]; next[i] = e.target.value;
+                          setEditing({ ...editing, keys: next });
+                        }}
+                        className="input flex-1 font-mono text-xs"
+                        placeholder="sk-..."
+                      />
                       {editing.keys.length > 1 && (
                         <button
                           type="button"
@@ -486,22 +475,13 @@ export function ProvidersClient({ initial }: { initial: Provider[] }) {
                   {addingKeyTo === p.id && (
                     <div className="card p-3 border-honey-500/30 space-y-2">
                       <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <input
-                            type={showNewKey ? "text" : "password"}
-                            value={newKey}
-                            onChange={(e) => setNewKey(e.target.value)}
-                            className="input pr-9"
-                            placeholder="sk-..."
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowNewKey(!showNewKey)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-200/40 hover:text-ink-200/80"
-                          >
-                            {showNewKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                          </button>
-                        </div>
+                        <input
+                          type="text"
+                          value={newKey}
+                          onChange={(e) => setNewKey(e.target.value)}
+                          className="input flex-1 font-mono text-xs"
+                          placeholder="sk-..."
+                        />
                         <input
                           value={newKeyLabel}
                           onChange={(e) => setNewKeyLabel(e.target.value)}
@@ -523,7 +503,7 @@ export function ProvidersClient({ initial }: { initial: Provider[] }) {
                       <table className="w-full text-sm">
                         <thead>
                           <tr>
-                            <th className="table-th">Prefix</th>
+                            <th className="table-th">API Key</th>
                             <th className="table-th">Label</th>
                             <th className="table-th">Status</th>
                             <th className="table-th text-right">Requests</th>
@@ -537,7 +517,25 @@ export function ProvidersClient({ initial }: { initial: Provider[] }) {
                             const inCooldown = k.errorCount >= 3;
                             return (
                               <tr key={k.id}>
-                                <td className="table-td font-mono text-xs">{k.prefix}…</td>
+                                <td className="table-td font-mono text-xs">
+                                  {k.plainKey ? (
+                                    <div className="flex items-center gap-1">
+                                      <span className="truncate max-w-[280px]">{k.plainKey}</span>
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(k.plainKey!);
+                                          alert("Đã copy key");
+                                        }}
+                                        className="text-honey-300 hover:text-honey-200 shrink-0"
+                                        title="Copy"
+                                      >
+                                        <Copy size={11} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-ink-200/40">{k.prefix}… (decrypt fail)</span>
+                                  )}
+                                </td>
                                 <td className="table-td text-xs">{k.label ?? "—"}</td>
                                 <td className="table-td">
                                   {!k.enabled ? (

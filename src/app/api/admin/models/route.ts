@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { encryptKey, isCipherConfigured } from "@/lib/key-cipher";
 
 const ALLOWED_PROVIDERS = ["openai", "anthropic", "google", "deepseek", "grok", "meta", "mistral", "other"];
 const ALLOWED_UPTIME = ["good", "warn", "down"];
 const ALLOWED_CATEGORIES = ["text", "embedding", "image", "video", "tts"];
+const ALLOWED_PROVIDER_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
+const ALLOWED_ROUTING = ["ROUND_ROBIN", "FAILOVER", "RANDOM", "LEAST_USED"];
 
 export async function DELETE(req: Request) {
   const session = await getServerSession(authOptions);
@@ -19,6 +22,47 @@ export async function DELETE(req: Request) {
   return NextResponse.json({ ok: true, deleted: r.count });
 }
 
+// Tạo Provider inline (khi admin chọn "Tạo provider mới" trong modal Model)
+// Trả providerId để gắn vào Model.
+async function createInlineProvider(np: any): Promise<string> {
+  if (!isCipherConfigured()) {
+    throw new Error("KEY_ENCRYPTION_KEY chưa cấu hình. Sinh: openssl rand -base64 32");
+  }
+  if (!np.name || typeof np.name !== "string") throw new Error("Provider thiếu tên");
+  if (!ALLOWED_PROVIDER_TYPES.includes(np.type)) throw new Error("Loại provider không hợp lệ");
+  const routing = ALLOWED_ROUTING.includes(np.routing) ? np.routing : "ROUND_ROBIN";
+  let baseUrl: string | null = null;
+  if (typeof np.baseUrl === "string" && np.baseUrl.trim()) {
+    baseUrl = np.baseUrl.trim().replace(/\/+$/, "");
+  }
+  if ((np.type === "OPENAI_COMPATIBLE" || np.type === "OLLAMA") && !baseUrl) {
+    throw new Error(`Provider loại ${np.type} cần baseUrl`);
+  }
+  const rawKeys: string[] = Array.isArray(np.keys)
+    ? np.keys.filter((k: any) => typeof k === "string" && k.trim())
+    : [];
+  if (rawKeys.length === 0) throw new Error("Provider cần ít nhất 1 API key");
+
+  const created = await prisma.provider.create({
+    data: {
+      name: String(np.name).trim(),
+      description: np.description ? String(np.description) : null,
+      type: np.type,
+      baseUrl,
+      routing,
+      enabled: np.enabled !== false,
+      keys: {
+        create: rawKeys.map((k, i) => ({
+          encryptedKey: encryptKey(k.trim()),
+          prefix: k.trim().slice(0, 8),
+          label: np.keyLabels?.[i] || `Key ${i + 1}`,
+        })),
+      },
+    },
+  });
+  return created.id;
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (session?.user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -28,6 +72,17 @@ export async function POST(req: Request) {
   const uptime = ALLOWED_UPTIME.includes(b.uptimeStatus) ? b.uptimeStatus : "good";
   const category = ALLOWED_CATEGORIES.includes(b.category) ? b.category : "text";
   const priceUnit = typeof b.priceUnit === "string" && b.priceUnit.trim() ? b.priceUnit.trim() : "1M tokens";
+
+  // Inline provider creation (optional)
+  let providerId: string | null = b.providerId ? String(b.providerId) : null;
+  if (b.newProvider && typeof b.newProvider === "object") {
+    try {
+      providerId = await createInlineProvider(b.newProvider);
+    } catch (e: any) {
+      return NextResponse.json({ error: `Lỗi tạo provider: ${e?.message || e}` }, { status: 400 });
+    }
+  }
+
   try {
     const m = await prisma.model.create({
       data: {
@@ -47,7 +102,7 @@ export async function POST(req: Request) {
         speedTps: Number(b.speedTps) || 0,
         latencyMs: Number(b.latencyMs) || 0,
         uptimeStatus: uptime,
-        providerId: b.providerId ? String(b.providerId) : null,
+        providerId,
         upstreamSlug: b.upstreamSlug ? String(b.upstreamSlug).trim() : null,
       },
     });
