@@ -37,12 +37,40 @@ type UpstreamRequest = {
 export async function callUpstream(req: UpstreamRequest): Promise<Response> {
   const { res } = await callWithFailover(req.model, "chat", async (u) => {
     const url = buildEndpointUrl(u.providerType, u.baseUrl, "chat");
-    const payload: any = {
-      model: u.upstreamModelSlug,
-      messages: req.messages,
-      stream: req.stream === true,
-      ...(req.extra || {}),
-    };
+    let payload: any;
+
+    if (u.providerType === "ANTHROPIC") {
+      const systemParts: string[] = [];
+      const anthropicMessages = req.messages
+        .map((m: any) => {
+          if (m.role === "system") {
+            if (m.content) systemParts.push(String(m.content));
+            return null;
+          }
+          return {
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: typeof m.content === "string" ? m.content : String(m.content ?? ""),
+          };
+        })
+        .filter(Boolean);
+
+      payload = {
+        model: u.upstreamModelSlug,
+        messages: anthropicMessages,
+        max_tokens: req.extra?.max_tokens ?? 1024,
+        stream: req.stream === true,
+        ...(systemParts.length ? { system: systemParts.join("\n") } : {}),
+        ...(req.extra || {}),
+      };
+    } else {
+      payload = {
+        model: u.upstreamModelSlug,
+        messages: req.messages,
+        stream: req.stream === true,
+        ...(req.extra || {}),
+      };
+    }
+
     try {
       return await fetch(url, {
         method: "POST",
@@ -62,7 +90,7 @@ export async function callUpstream(req: UpstreamRequest): Promise<Response> {
   return res;
 }
 
-// Đọc response non-stream OpenAI-compat → text + usage.
+// Đọc response non-stream OpenAI-compat hoặc Anthropic Messages → text + usage.
 export async function readNonStream(res: Response): Promise<{
   text: string;
   promptTokens?: number;
@@ -75,12 +103,20 @@ export async function readNonStream(res: Response): Promise<{
     const safeMsg = `API key của admin gặp sự cố — ${describeAdminKeyError(res.status)}. Vui lòng thử lại sau hoặc báo admin.`;
     throw new UpstreamError(res.status, safeMsg, json, true);
   }
-  const text: string = json?.choices?.[0]?.message?.content ?? "";
+
+  const openAiText: string | undefined = json?.choices?.[0]?.message?.content;
+  const anthropicText = Array.isArray(json?.content)
+    ? json.content
+        .filter((b: any) => b?.type === "text" && typeof b?.text === "string")
+        .map((b: any) => b.text)
+        .join("")
+    : undefined;
+
   const usage = json?.usage || {};
   return {
-    text,
-    promptTokens: usage.prompt_tokens,
-    completionTokens: usage.completion_tokens,
+    text: openAiText ?? anthropicText ?? "",
+    promptTokens: usage.prompt_tokens ?? usage.input_tokens,
+    completionTokens: usage.completion_tokens ?? usage.output_tokens,
     raw: json,
   };
 }
