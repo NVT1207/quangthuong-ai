@@ -35,7 +35,11 @@ export function PlaygroundClient({ models }: { models: { slug: string; name: str
       });
       const data = await r.json();
       if (!r.ok) {
-        setMsgs([...next, { role: "assistant", content: `❌ Lỗi: ${data.error || r.statusText}` }]);
+        const isInsufficient = data?.code === "insufficient_balance" || r.status === 402;
+        const text = isInsufficient
+          ? `💸 ${data.error || "Số dư không đủ."}\n\n👉 [Nạp tiền ngay](/topup)`
+          : `❌ Lỗi: ${data.error || r.statusText}`;
+        setMsgs([...next, { role: "assistant", content: text }]);
       } else {
         setMsgs([...next, { role: "assistant", content: data.message }]);
         setLastUsage({ in: data.inputTokens, out: data.outputTokens, cost: data.cost });

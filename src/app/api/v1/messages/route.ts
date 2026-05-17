@@ -15,6 +15,7 @@ import {
   isUpstreamConfigured,
   UpstreamError,
 } from "@/lib/provider-routing";
+import { formatVND } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -147,12 +148,29 @@ export async function POST(req: Request) {
   const estInputTokens = countTokens(sysText + "\n" + msgText);
   const discountField = tierDiscountField((key.user.tier as Tier) ?? "FREE");
   const discount = discountField ? ((model as any)[discountField] as number | undefined) ?? 0 : 0;
+
+  // Chặn cứng nếu balance <= 0 (chưa nạp / hết tiền)
+  if (key.user.balance <= 0) {
+    await prisma.usageLog.create({
+      data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip },
+    });
+    return err(
+      402,
+      `Số dư tài khoản bằng 0. Vui lòng nạp tiền tại https://beeknoee.com/topup trước khi sử dụng Claude Code.`,
+      "insufficient_balance",
+    );
+  }
+
   const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice, discount);
   if (key.user.balance < minCost) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip },
     });
-    return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
+    return err(
+      402,
+      `Số dư không đủ (hiện có ${formatVND(key.user.balance)}, cần tối thiểu ${formatVND(minCost)} cho prompt này). Nạp thêm tại https://beeknoee.com/topup`,
+      "insufficient_balance",
+    );
   }
 
   // Forward to upstream /messages via multi-provider routing + auto failover
@@ -306,7 +324,11 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: 402, ip },
     });
-    return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
+    return err(
+      402,
+      `Số dư không đủ sau khi tính phí (cần ${formatVND(cost)}, hiện có ${formatVND(balance)}). Nạp thêm tại https://beeknoee.com/topup`,
+      "insufficient_balance",
+    );
   }
   const newBalance = balance - cost;
   await prisma.$transaction([
