@@ -13,37 +13,16 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { formatVND } from "@/lib/format";
-
-type Period = "MONTH" | "HALF_YEAR" | "YEAR";
-type PaidPlan = "BASIC" | "ADV";
-type Tier = "FREE" | "BASIC" | "ADV" | "ULTRA";
-
-const PLAN_PRICES: Record<PaidPlan, Record<Period, number>> = {
-  BASIC: {
-    MONTH: 99_000,
-    HALF_YEAR: Math.round(99_000 * 6 * 0.84),
-    YEAR: Math.round(99_000 * 12 * 0.76),
-  },
-  ADV: {
-    MONTH: 199_000,
-    HALF_YEAR: Math.round(199_000 * 6 * 0.84),
-    YEAR: Math.round(199_000 * 12 * 0.76),
-  },
-};
-
-const PERIOD_DAYS: Record<Period, number> = { MONTH: 30, HALF_YEAR: 180, YEAR: 365 };
-const PERIOD_LABEL: Record<Period, string> = {
-  MONTH: "1 tháng",
-  HALF_YEAR: "6 tháng",
-  YEAR: "1 năm",
-};
-const PERIOD_DISCOUNT: Record<Period, string> = {
-  MONTH: "",
-  HALF_YEAR: "-16%",
-  YEAR: "-24%",
-};
-
-const TIER_RANK: Record<Tier, number> = { FREE: 0, BASIC: 1, ADV: 2, ULTRA: 3 };
+import {
+  PLAN_PRICES,
+  PERIOD_DAYS,
+  PERIOD_LABEL,
+  PERIOD_DISCOUNT_LABEL as PERIOD_DISCOUNT,
+  TIER_RANK,
+  type Period,
+  type PaidPlan,
+  type Tier,
+} from "@/lib/tier-config";
 
 type FeatureRow = {
   label: string;

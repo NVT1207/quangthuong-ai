@@ -4,6 +4,7 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, Respons
 import { Hash, Zap, CreditCard, TrendingUp, Sparkles, PiggyBank, Calendar, Receipt, CheckCircle2, Download } from "lucide-react";
 import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 import { simulatedCacheTokens, computeOriginal, formatShortDate, daysInMonth } from "@/lib/usage-stats";
+import { tierDiscountField, type Tier } from "@/lib/tier-config";
 
 type LogItem = {
   id: string;
@@ -25,14 +26,6 @@ type ModelMeta = {
   basicDiscount: number;
   advDiscount: number;
 };
-
-type Tier = "FREE" | "BASIC" | "ADV" | "ULTRA";
-
-function tierDiscountField(tier: Tier): "basicDiscount" | "advDiscount" | null {
-  if (tier === "FREE") return null;
-  if (tier === "BASIC") return "basicDiscount";
-  return "advDiscount";
-}
 
 const PIE_COLORS = ["#a855f7", "#3b82f6", "#f59e0b", "#10b981", "#ec4899", "#06b6d4", "#ef4444", "#84cc16"];
 
