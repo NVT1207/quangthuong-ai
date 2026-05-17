@@ -68,15 +68,6 @@ export default async function ApiKeysPage() {
           };
         })}
       />
-
-      <div className="card p-5">
-        <p className="font-medium mb-3">Hướng dẫn sử dụng</p>
-        <p className="text-sm text-ink-200/60 mb-3">Gửi key trong header <code className="text-honey-300">Authorization</code>:</p>
-        <pre className="text-xs bg-black/40 rounded-xl p-4 overflow-x-auto"><code>{`curl ${baseUrl}/api/v1/chat/completions \\
-  -H "Authorization: Bearer sk-bee-XXXXXXXX" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model": "gpt-4o", "messages": [{"role":"user","content":"hi"}]}'`}</code></pre>
-      </div>
     </div>
   );
 }

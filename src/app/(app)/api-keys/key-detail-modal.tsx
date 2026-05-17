@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { X, BarChart3, Clock, Hash, DollarSign, Activity } from "lucide-react";
+import { X, BarChart3, Clock, Hash, DollarSign, Activity, Terminal } from "lucide-react";
 import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
+import { CliPanels, type KeyItem, type ModelOpt } from "./cli-panels";
 
 type Detail = {
   key: { id: string; name: string; prefix: string; suffix: string; enabled: boolean; createdAt: string; lastUsedAt: string | null };
@@ -11,7 +12,17 @@ type Detail = {
   recent: { id: string; modelSlug: string; modelName: string; inputTokens: number; outputTokens: number; cost: number; status: number; createdAt: string }[];
 };
 
-export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () => void }) {
+type Props = {
+  keyId: string;
+  onClose: () => void;
+  baseUrl: string;
+  models: ModelOpt[];
+  keyItem: KeyItem;
+  revealed?: Record<string, string>;
+};
+
+export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revealed }: Props) {
+  const [tab, setTab] = useState<"stats" | "cli">("stats");
   const [data, setData] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,7 +65,7 @@ export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () 
           <div className="p-12 text-center text-ink-200/50 text-sm">Đang tải dữ liệu...</div>
         ) : (
           <div className="p-6 space-y-6">
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-3 text-sm flex-wrap">
               <code className="font-mono text-xs px-2.5 py-1 rounded-lg bg-ink-950/60 border border-white/5">{data.key.prefix}...{data.key.suffix}</code>
               <span className={
                 data.key.enabled
@@ -66,6 +77,20 @@ export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () 
               <span className="text-ink-200/50 text-xs">Tạo: {formatDateTime(data.key.createdAt)}</span>
             </div>
 
+            <div className="flex gap-1 border-b border-white/5 -mx-6 px-6">
+              <TabButton active={tab === "stats"} onClick={() => setTab("stats")} icon={<BarChart3 size={13} />}>Thống kê</TabButton>
+              <TabButton active={tab === "cli"} onClick={() => setTab("cli")} icon={<Terminal size={13} />}>Cài đặt CLI</TabButton>
+            </div>
+
+            {tab === "cli" ? (
+              <CliPanels
+                keys={[keyItem]}
+                models={models}
+                baseUrl={baseUrl}
+                revealed={revealed}
+              />
+            ) : (
+              <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard icon={<Activity size={14} />} label="Tổng requests" value={formatNumber(data.stats.totalRequests)} />
               <StatCard icon={<DollarSign size={14} />} label="Tổng chi" value={formatUSD(data.stats.totalCost)} accent="emerald" />
@@ -149,10 +174,27 @@ export function KeyDetailModal({ keyId, onClose }: { keyId: string; onClose: () 
                 </div>
               )}
             </Section>
+              </>
+            )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        active
+          ? "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 border-sky-400 text-sky-300"
+          : "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 border-transparent text-ink-200/60 hover:text-ink-100"
+      }
+    >
+      {icon} {children}
+    </button>
   );
 }
 

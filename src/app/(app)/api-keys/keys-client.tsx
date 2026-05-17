@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Copy, Check, KeyRound, AlertTriangle, Search, Pencil, Eye, EyeOff, Loader2 } from "lucide-react";
-import { CliPanels, type ModelOpt } from "./cli-panels";
+import type { ModelOpt } from "./cli-panels";
 import { KeyDetailModal } from "./key-detail-modal";
 import { formatUSD, formatNumber } from "@/lib/format";
 
@@ -313,11 +313,20 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
         )}
       </div>
 
-      <CliPanels keys={keys} models={models} baseUrl={baseUrl} revealed={revealed} />
-
-      {detailKeyId && (
-        <KeyDetailModal keyId={detailKeyId} onClose={() => setDetailKeyId(null)} />
-      )}
+      {detailKeyId && (() => {
+        const k = keys.find((x) => x.id === detailKeyId);
+        if (!k) return null;
+        return (
+          <KeyDetailModal
+            keyId={detailKeyId}
+            onClose={() => setDetailKeyId(null)}
+            baseUrl={baseUrl}
+            models={models}
+            keyItem={{ id: k.id, name: k.name, prefix: k.prefix, suffix: k.suffix }}
+            revealed={revealed}
+          />
+        );
+      })()}
     </>
   );
 }
