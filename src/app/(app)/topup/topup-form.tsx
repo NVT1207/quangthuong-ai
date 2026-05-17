@@ -206,23 +206,6 @@ export function TopupForm() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 flex-wrap text-xs text-ink-200/60 mb-4">
-          <span className="text-ink-200/50">🎁 Ưu đãi:</span>
-          {PROMO_CODES.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => {
-                setPromo(c);
-                setPromoApplied(c);
-              }}
-              className="font-mono tracking-wider text-honey-300 hover:text-honey-200 hover:underline"
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
         {error && <p className="text-sm text-rose-400 mb-3">{error}</p>}
 
         <button
