@@ -59,13 +59,24 @@ export async function POST(req: Request) {
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
     const isAdmin = e instanceof UpstreamError && e.adminSide;
+    // Trích message từ upstream body nếu có (debug — admin/owner mới thấy)
+    let detail = "";
+    if (e instanceof UpstreamError && e.body) {
+      try {
+        const b = typeof e.body === "string" ? JSON.parse(e.body) : e.body;
+        detail = b?.error?.message || b?.message || JSON.stringify(b).slice(0, 200);
+      } catch {
+        detail = String(e.body).slice(0, 200);
+      }
+    }
+    const isOwner = user?.role === "ADMIN";
     const msg = isAdmin
-      ? e.message
-      : `API key của admin gặp sự cố — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin.`;
+      ? `${e.message}${isOwner && detail ? ` [Upstream: ${detail}]` : ""}`
+      : `API key của admin gặp sự cố — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin.${isOwner && detail ? ` [Upstream: ${detail}]` : ""}`;
     await prisma.usageLog.create({
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status },
     });
-    return NextResponse.json({ error: msg, code: "upstream_key_error" }, { status: 502 });
+    return NextResponse.json({ error: msg, code: "upstream_key_error", upstreamStatus: status, upstreamDetail: isOwner ? detail : undefined }, { status: 502 });
   }
 
   let parsed;
@@ -74,13 +85,23 @@ export async function POST(req: Request) {
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
     const isAdmin = e instanceof UpstreamError && e.adminSide;
+    let detail = "";
+    if (e instanceof UpstreamError && e.body) {
+      try {
+        const b = typeof e.body === "string" ? JSON.parse(e.body) : e.body;
+        detail = b?.error?.message || b?.message || JSON.stringify(b).slice(0, 200);
+      } catch {
+        detail = String(e.body).slice(0, 200);
+      }
+    }
+    const isOwner = user?.role === "ADMIN";
     const msg = isAdmin
-      ? e.message
-      : `API key của admin gặp sự cố — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin.`;
+      ? `${e.message}${isOwner && detail ? ` [Upstream: ${detail}]` : ""}`
+      : `API key của admin gặp sự cố — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin.${isOwner && detail ? ` [Upstream: ${detail}]` : ""}`;
     await prisma.usageLog.create({
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status },
     });
-    return NextResponse.json({ error: msg, code: "upstream_key_error" }, { status: 502 });
+    return NextResponse.json({ error: msg, code: "upstream_key_error", upstreamStatus: status, upstreamDetail: isOwner ? detail : undefined }, { status: 502 });
   }
 
   const inputTokens = parsed.promptTokens ?? estInputTokens;
