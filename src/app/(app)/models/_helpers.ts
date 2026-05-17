@@ -1,13 +1,30 @@
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import type { Tier } from "@/lib/tier-config";
 
 export async function loadModelsByCategory(categories: string[]) {
-  const models = await prisma.model.findMany({
-    where: { active: true, category: { in: categories } },
-    orderBy: [{ provider: "asc" }, { displayName: "asc" }],
-  });
+  const [models, session] = await Promise.all([
+    prisma.model.findMany({
+      where: { active: true, category: { in: categories } },
+      orderBy: [{ provider: "asc" }, { displayName: "asc" }],
+    }),
+    getServerSession(authOptions),
+  ]);
+
+  let userTier: Tier = "FREE";
+  if (session?.user?.id) {
+    const u = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { tier: true },
+    });
+    userTier = (u?.tier as Tier) ?? "FREE";
+  }
+
   const providers = [...new Set(models.map((m) => m.provider))].sort();
   return {
     providers,
+    userTier,
     models: models.map((m) => ({
       id: m.id,
       slug: m.slug,

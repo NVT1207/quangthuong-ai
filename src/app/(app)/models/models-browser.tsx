@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { Zap, Clock, Search } from "lucide-react";
 import { formatNumber, formatUSD } from "@/lib/format";
 import { CopySlug } from "./copy-slug";
+import { TIER_LABEL, type Tier } from "@/lib/tier-config";
 
 type ModelItem = {
   id: string;
@@ -61,9 +62,97 @@ const SORTS = [
 
 type SortKey = (typeof SORTS)[number]["value"];
 
+// Lấy % giảm tương ứng tier hiện tại của user (để strikethrough giá gốc + show giá thực trả).
+function discountForTier(m: ModelItem, tier: Tier): number {
+  if (tier === "BASIC") return m.basicDiscount || 0;
+  if (tier === "ADV" || tier === "ULTRA") return m.advDiscount || 0;
+  return m.freeDiscount || 0; // FREE
+}
+
+// Hàng badge "Free -30%  Basic -40%  Adv+ -50%" — highlight tier hiện tại của user.
+function DiscountRow({ m, userTier }: { m: ModelItem; userTier: Tier }) {
+  const items: Array<{ key: Tier; label: string; value: number }> = [
+    { key: "FREE", label: "Free", value: m.freeDiscount || 0 },
+    { key: "BASIC", label: "Basic", value: m.basicDiscount || 0 },
+    { key: "ADV", label: "Adv+", value: m.advDiscount || 0 },
+  ];
+  // ULTRA xem như ADV
+  const activeKey: Tier = userTier === "ULTRA" ? "ADV" : userTier;
+  return (
+    <div className="flex items-center gap-2 text-xs mb-3 flex-wrap">
+      {items.map((it) => {
+        const active = it.key === activeKey;
+        if (it.value <= 0) {
+          return (
+            <span
+              key={it.key}
+              className={`${active ? "text-ink-200/80" : "text-ink-200/40"} ${active ? "font-semibold" : ""}`}
+            >
+              {it.label} —
+            </span>
+          );
+        }
+        return (
+          <span
+            key={it.key}
+            className={`inline-flex items-center gap-0.5 ${
+              active ? "text-rose-400 font-bold" : "text-ink-200/50"
+            }`}
+            title={
+              active
+                ? `Bạn đang dùng tier ${TIER_LABEL[it.key]} — được giảm ${it.value}%`
+                : `Tier ${TIER_LABEL[it.key]}: giảm ${it.value}%`
+            }
+          >
+            <span className={active ? "" : "text-ink-200/70"}>{it.label}</span>
+            <span>-{it.value}%</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// Hiển thị 1 dòng giá: nếu user có discount thì strikethrough giá gốc + show giá thực trả màu rose.
+function PriceLine({
+  label,
+  price,
+  discount,
+  unitShort,
+}: {
+  label: string;
+  price: number;
+  discount: number;
+  unitShort: string;
+}) {
+  if (discount > 0) {
+    const discounted = price * (1 - discount / 100);
+    return (
+      <div className="flex justify-between items-baseline">
+        <span className="text-ink-200/50">{label}</span>
+        <span className="text-sm">
+          <span className="line-through text-ink-200/40 mr-1">{formatUSD(price)}</span>
+          <span className="text-rose-400 font-semibold">{formatUSD(discounted)}</span>
+          <span className="text-ink-200/50">{unitShort}</span>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex justify-between">
+      <span className="text-ink-200/50">{label}</span>
+      <span className="text-honey-300">
+        {formatUSD(price)}
+        {unitShort}
+      </span>
+    </div>
+  );
+}
+
 export function ModelsBrowser({
   models,
   providers,
+  userTier = "FREE",
   title,
   subtitle,
   showOutput = true,
@@ -71,6 +160,7 @@ export function ModelsBrowser({
 }: {
   models: ModelItem[];
   providers: string[];
+  userTier?: Tier;
   title?: string;
   subtitle?: string;
   showOutput?: boolean;
@@ -205,18 +295,24 @@ export function ModelsBrowser({
                   </div>
                 </div>
 
-                {m.description && <p className="text-sm text-ink-200/60 mb-4 flex-1">{m.description}</p>}
+                {m.description && <p className="text-sm text-ink-200/60 mb-3 flex-1">{m.description}</p>}
+
+                <DiscountRow m={m} userTier={userTier} />
 
                 <div className="space-y-1 text-sm mb-3">
-                  <div className="flex justify-between">
-                    <span className="text-ink-200/50">{showOutput ? "Input" : "Giá"}</span>
-                    <span className="text-honey-300">{formatUSD(m.inputPrice)}{unitShort}</span>
-                  </div>
+                  <PriceLine
+                    label={showOutput ? "Input" : "Giá"}
+                    price={m.inputPrice}
+                    discount={discountForTier(m, userTier)}
+                    unitShort={unitShort}
+                  />
                   {showOutput && m.outputPrice > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-ink-200/50">Output</span>
-                      <span className="text-honey-300">{formatUSD(m.outputPrice)}{unitShort}</span>
-                    </div>
+                    <PriceLine
+                      label="Output"
+                      price={m.outputPrice}
+                      discount={discountForTier(m, userTier)}
+                      unitShort={unitShort}
+                    />
                   )}
                   {showContext && m.contextLength > 0 && (
                     <div className="flex justify-between"><span className="text-ink-200/50">Context</span><span>{formatNumber(m.contextLength)} tokens</span></div>
