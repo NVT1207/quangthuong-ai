@@ -29,6 +29,15 @@ export function CliPanels({ keys, models, baseUrl, revealed }: Props) {
   );
 }
 
+// Wrapper không collapsible — dùng trong tab riêng. Render trực tiếp nội dung setup.
+export function ClaudeSetupCard(props: Props) {
+  return <div className="space-y-5"><ClaudeSetup {...props} /></div>;
+}
+
+export function OpenclawSetupCard(props: Props) {
+  return <div className="space-y-5"><OpenclawSetup {...props} /></div>;
+}
+
 function Card({ title, subtitle, icon, children }: { title: string; subtitle: string; icon: React.ReactNode; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (

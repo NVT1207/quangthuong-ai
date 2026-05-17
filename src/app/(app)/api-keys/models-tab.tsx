@@ -1,6 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2, Search, X, AlertCircle, Loader2, Check } from "lucide-react";
+import {
+  Search, X, AlertCircle, Loader2, Check, Link2, Copy, DollarSign, Hash,
+  TrendingUp, Clock, Activity,
+} from "lucide-react";
 import { formatUSD, formatNumber } from "@/lib/format";
 
 type ModelInfo = {
@@ -14,7 +17,7 @@ type Subscription = {
   enabled: boolean;
   createdAt: string;
   model: ModelInfo;
-  stats: { totalRequests: number; totalCost: number; totalInputTokens: number; totalOutputTokens: number };
+  stats: { totalRequests: number; totalCost: number; totalInputTokens: number; totalOutputTokens: number; successCount?: number; avgLatencyMs?: number; lastUsedAt?: string | null };
 };
 
 const CAT_LABEL: Record<string, string> = {
@@ -29,7 +32,43 @@ const CAT_COLOR: Record<string, string> = {
   tts: "border-honey-500/30 bg-honey-500/10 text-honey-300",
 };
 
-export function ModelsTab({ keyId, onCountChange }: { keyId: string; onCountChange?: (n: number) => void }) {
+const PROVIDER_COLOR: Record<string, string> = {
+  openai: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  anthropic: "border-orange-500/30 bg-orange-500/10 text-orange-300",
+  google: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  gemini: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  meta: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  xai: "border-violet-500/30 bg-violet-500/10 text-violet-300",
+  deepseek: "border-purple-500/30 bg-purple-500/10 text-purple-300",
+  mistral: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  cohere: "border-pink-500/30 bg-pink-500/10 text-pink-300",
+};
+
+function providerCls(p: string) {
+  const k = p?.toLowerCase() ?? "";
+  return PROVIDER_COLOR[k] || "border-violet-500/30 bg-violet-500/10 text-violet-300";
+}
+
+function timeAgo(iso?: string | null): string {
+  if (!iso) return "Chưa dùng";
+  const d = new Date(iso).getTime();
+  if (isNaN(d)) return iso;
+  const s = Math.max(0, Math.floor((Date.now() - d) / 1000));
+  if (s < 60) return `${s}s trước`;
+  if (s < 3600) return `${Math.floor(s / 60)}p trước`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h trước`;
+  return `${Math.floor(s / 86400)}d trước`;
+}
+
+export function ModelsTab({
+  keyId,
+  onCountChange,
+  addSignal,
+}: {
+  keyId: string;
+  onCountChange?: (n: number) => void;
+  addSignal?: number;
+}) {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
@@ -44,6 +83,11 @@ export function ModelsTab({ keyId, onCountChange }: { keyId: string; onCountChan
   }, [keyId, onCountChange]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Mở picker khi addSignal thay đổi (từ nút "+ Thêm Model mới" trong header modal)
+  useEffect(() => {
+    if (typeof addSignal === "number" && addSignal > 0) setAddOpen(true);
+  }, [addSignal]);
 
   async function toggle(modelId: string, enabled: boolean) {
     setSubs((p) => p.map((s) => (s.modelId === modelId ? { ...s, enabled } : s)));
@@ -67,36 +111,19 @@ export function ModelsTab({ keyId, onCountChange }: { keyId: string; onCountChan
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm text-ink-200/70">
-          <span>Đã subscribe <span className="font-semibold text-ink-100">{subs.length}</span> model</span>
-          {subs.some((s) => !s.enabled) && (
-            <span className="text-[11px] px-2 py-0.5 rounded border border-honey-500/30 bg-honey-500/10 text-honey-300">
-              {subs.filter((s) => !s.enabled).length} đang tắt
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-sky-500 to-violet-500 text-white shadow-md shadow-sky-500/20 hover:from-sky-400 hover:to-violet-400 transition"
-        >
-          <Plus size={13} /> Thêm Model
-        </button>
-      </div>
-
+    <div className="space-y-3">
       {loading ? (
-        <div className="py-10 text-center text-ink-200/40 text-sm flex items-center justify-center gap-2">
+        <div className="py-14 text-center text-ink-200/40 text-sm flex items-center justify-center gap-2">
           <Loader2 size={14} className="animate-spin" /> Đang tải...
         </div>
       ) : subs.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-ink-950/30 py-10 text-center">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-ink-950/30 py-14 text-center">
           <AlertCircle className="mx-auto text-ink-200/30 mb-2" size={28} />
           <p className="text-sm text-ink-200/55">Key này chưa subscribe model nào.</p>
-          <p className="text-xs text-ink-200/40 mt-1">Bấm "Thêm Model" để chọn từ danh sách model có sẵn.</p>
+          <p className="text-xs text-ink-200/40 mt-1">Bấm "+ Thêm Model mới" ở góc trên để chọn từ danh sách model có sẵn.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {subs.map((s) => (
             <SubscriptionRow
               key={s.id}
@@ -119,38 +146,118 @@ export function ModelsTab({ keyId, onCountChange }: { keyId: string; onCountChan
   );
 }
 
-function SubscriptionRow({ sub, onToggle, onRemove }: { sub: Subscription; onToggle: (v: boolean) => void; onRemove: () => void }) {
+function SubscriptionRow({
+  sub,
+  onToggle,
+  onRemove,
+}: {
+  sub: Subscription;
+  onToggle: (v: boolean) => void;
+  onRemove: () => void;
+}) {
   const m = sub.model;
   const cat = CAT_LABEL[m.category] || m.category;
   const catCls = CAT_COLOR[m.category] || "border-white/10 bg-white/5 text-ink-200/70";
+  const provCls = providerCls(m.provider);
+  const successRate = sub.stats.totalRequests > 0 && sub.stats.successCount != null
+    ? Math.round((sub.stats.successCount / sub.stats.totalRequests) * 100)
+    : (sub.stats.totalRequests > 0 ? 100 : 0);
+  const totalTokens = sub.stats.totalInputTokens + sub.stats.totalOutputTokens;
+
   return (
-    <div className="rounded-xl border border-white/5 bg-ink-950/40 px-4 py-3 hover:border-white/15 transition">
+    <div className="rounded-xl border border-white/5 bg-ink-950/40 p-4 hover:border-white/15 transition">
       <div className="flex items-start gap-3">
+        {/* Icon box left */}
+        <div className="w-10 h-10 rounded-xl bg-honey-500/10 border border-honey-500/20 flex items-center justify-center shrink-0">
+          <Link2 size={18} className="text-honey-300" />
+        </div>
+
+        {/* Content middle */}
         <div className="flex-1 min-w-0">
+          {/* Header line: slug + copy + Active + provider + category */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium truncate">{m.displayName}</span>
-            <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border ${catCls}`}>{cat}</span>
-            <span className="text-[10px] font-mono uppercase text-ink-200/40">{m.provider}</span>
-            {!sub.enabled && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300">Tắt</span>
+            <code className="text-sm font-mono font-semibold text-ink-100 truncate">{m.slug}</code>
+            <button
+              onClick={() => navigator.clipboard.writeText(m.slug).catch(() => {})}
+              className="p-0.5 rounded text-ink-200/40 hover:text-ink-100 hover:bg-white/5 transition"
+              title="Copy slug"
+            >
+              <Copy size={12} />
+            </button>
+            {sub.enabled ? (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+                Active
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-300">
+                Tắt
+              </span>
+            )}
+            <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border ${provCls}`}>
+              {m.provider}
+            </span>
+            <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border ${catCls}`}>
+              {cat}
+            </span>
+            {/* Toggle micro */}
+            <button
+              onClick={() => onToggle(!sub.enabled)}
+              className="ml-1 text-[10px] text-ink-200/45 hover:text-sky-300 transition"
+              title={sub.enabled ? "Tắt subscribe" : "Bật subscribe"}
+            >
+              [{sub.enabled ? "tắt" : "bật"}]
+            </button>
+          </div>
+
+          {/* Sub-line: model name */}
+          <div className="mt-1 text-xs text-ink-200/65 truncate">
+            <span className="text-ink-200/45">Tên hiển thị:</span>{" "}
+            <span className="text-ink-100/85">{m.displayName}</span>
+          </div>
+
+          {/* Price line */}
+          <div className="mt-0.5 text-[11px] text-ink-200/55 flex items-center gap-1 flex-wrap">
+            <span>${m.inputPrice}/{m.priceUnit} input</span>
+            <span className="text-ink-200/30">·</span>
+            <span>${m.outputPrice}/{m.priceUnit} output</span>
+            {m.contextLength > 0 && (
+              <>
+                <span className="text-ink-200/30">·</span>
+                <span>{formatNumber(m.contextLength)} ctx</span>
+              </>
             )}
           </div>
-          <div className="mt-1 text-[11px] font-mono text-ink-200/45 truncate">{m.slug}</div>
-          <div className="mt-2 flex items-center gap-4 text-[11px] text-ink-200/60">
-            <span>{formatNumber(sub.stats.totalRequests)} req</span>
-            <span className="text-emerald-300/80">{formatUSD(sub.stats.totalCost)}</span>
-            <span>In ${m.inputPrice}/{m.priceUnit} · Out ${m.outputPrice}/{m.priceUnit}</span>
-            {m.contextLength > 0 && <span>{formatNumber(m.contextLength)} ctx</span>}
+
+          {/* Đăng ký line */}
+          <div className="mt-0.5 text-[11px] text-ink-200/45">
+            Đăng ký: {sub.createdAt ? new Date(sub.createdAt).toLocaleString("vi-VN") : "—"}
+          </div>
+
+          {/* Stats footer */}
+          <div className="mt-2.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-[11px] font-mono">
+            <Metric icon={<Link2 size={11} />} value={`${formatNumber(sub.stats.totalRequests)} req`} />
+            <Metric
+              icon={<TrendingUp size={11} />}
+              value={`${successRate}%`}
+              tone={successRate >= 95 ? "emerald" : successRate >= 80 ? "honey" : "rose"}
+            />
+            <Metric icon={<DollarSign size={11} />} value={formatUSD(sub.stats.totalCost)} tone="emerald" />
+            <Metric icon={<Hash size={11} />} value={formatNumber(totalTokens)} />
+            {sub.stats.avgLatencyMs != null && sub.stats.avgLatencyMs > 0 && (
+              <Metric icon={<Activity size={11} />} value={`${Math.round(sub.stats.avgLatencyMs)}ms`} />
+            )}
+            <Metric icon={<Clock size={11} />} value={timeAgo(sub.stats.lastUsedAt)} />
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Toggle on={sub.enabled} onChange={onToggle} />
+
+        {/* Right: Hủy red text-link */}
+        <div className="shrink-0">
           <button
             onClick={onRemove}
-            className="p-1.5 rounded-lg text-rose-300/70 hover:text-rose-300 hover:bg-rose-500/10 transition"
+            className="text-sm font-medium text-rose-300/85 hover:text-rose-200 hover:underline transition"
             title="Bỏ subscribe"
           >
-            <Trash2 size={13} />
+            Hủy
           </button>
         </div>
       </div>
@@ -158,15 +265,17 @@ function SubscriptionRow({ sub, onToggle, onRemove }: { sub: Subscription; onTog
   );
 }
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Metric({ icon, value, tone }: { icon: React.ReactNode; value: string; tone?: "emerald" | "honey" | "rose" }) {
+  const cls =
+    tone === "emerald" ? "text-emerald-300/85"
+    : tone === "honey" ? "text-honey-300/85"
+    : tone === "rose" ? "text-rose-300/85"
+    : "text-ink-200/65";
   return (
-    <button
-      onClick={() => onChange(!on)}
-      className={`relative h-5 w-9 rounded-full transition shrink-0 ${on ? "bg-emerald-500/80" : "bg-ink-700"}`}
-      title={on ? "Đang bật" : "Đang tắt"}
-    >
-      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
-    </button>
+    <span className={`inline-flex items-center gap-1 ${cls}`}>
+      <span className="text-ink-200/40">{icon}</span>
+      {value}
+    </span>
   );
 }
 

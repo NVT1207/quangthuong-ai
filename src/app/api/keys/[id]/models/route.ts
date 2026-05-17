@@ -31,15 +31,24 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
   // Stats per-model từ UsageLog
   const slugs = subs.map((s) => s.model.slug);
-  const stats = slugs.length
-    ? await prisma.usageLog.groupBy({
-        by: ["modelSlug"],
-        where: { apiKeyId: params.id, modelSlug: { in: slugs } },
-        _sum: { cost: true, inputTokens: true, outputTokens: true },
-        _count: { _all: true },
-      })
-    : [];
+  const [stats, successStats] = slugs.length
+    ? await Promise.all([
+        prisma.usageLog.groupBy({
+          by: ["modelSlug"],
+          where: { apiKeyId: params.id, modelSlug: { in: slugs } },
+          _sum: { cost: true, inputTokens: true, outputTokens: true },
+          _count: { _all: true },
+          _max: { createdAt: true },
+        }),
+        prisma.usageLog.groupBy({
+          by: ["modelSlug"],
+          where: { apiKeyId: params.id, modelSlug: { in: slugs }, status: { gte: 200, lt: 300 } },
+          _count: { _all: true },
+        }),
+      ])
+    : [[], []];
   const statMap = new Map(stats.map((s) => [s.modelSlug, s]));
+  const successMap = new Map(successStats.map((s) => [s.modelSlug, s._count._all]));
 
   const rows = subs.map((s) => {
     const st = statMap.get(s.model.slug);
@@ -54,6 +63,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
         totalCost: st?._sum.cost ?? 0,
         totalInputTokens: st?._sum.inputTokens ?? 0,
         totalOutputTokens: st?._sum.outputTokens ?? 0,
+        successCount: successMap.get(s.model.slug) ?? 0,
+        lastUsedAt: st?._max.createdAt ? st._max.createdAt.toISOString() : null,
       },
     };
   });
