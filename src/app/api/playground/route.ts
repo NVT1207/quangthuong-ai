@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { countTokens, computeCost } from "@/lib/pricing";
-import { callUpstream, readNonStream, isUpstreamConfigured, UpstreamError } from "@/lib/upstream";
+import { callUpstream, readNonStream, isUpstreamConfigured, UpstreamError, describeAdminKeyError } from "@/lib/upstream";
 import { tierDiscountField, type Tier } from "@/lib/tier";
 import { formatVND } from "@/lib/format";
 
@@ -58,10 +58,14 @@ export async function POST(req: Request) {
     upstream = await callUpstream({ model: m.slug, messages, stream: false });
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
+    const isAdmin = e instanceof UpstreamError && e.adminSide;
+    const msg = isAdmin
+      ? e.message
+      : `API key của admin gặp sự cố — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin.`;
     await prisma.usageLog.create({
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status },
     });
-    return NextResponse.json({ error: e?.message || "Upstream lỗi" }, { status });
+    return NextResponse.json({ error: msg, code: "upstream_key_error" }, { status: 502 });
   }
 
   let parsed;
@@ -69,10 +73,14 @@ export async function POST(req: Request) {
     parsed = await readNonStream(upstream);
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
+    const isAdmin = e instanceof UpstreamError && e.adminSide;
+    const msg = isAdmin
+      ? e.message
+      : `API key của admin gặp sự cố — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin.`;
     await prisma.usageLog.create({
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status },
     });
-    return NextResponse.json({ error: e?.message || "Upstream lỗi" }, { status });
+    return NextResponse.json({ error: msg, code: "upstream_key_error" }, { status: 502 });
   }
 
   const inputTokens = parsed.promptTokens ?? estInputTokens;

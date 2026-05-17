@@ -7,10 +7,11 @@ import {
   buildEndpointUrl,
   callWithFailover,
   UpstreamError,
+  describeAdminKeyError,
   isUpstreamConfigured as isUpstreamConfiguredCore,
 } from "@/lib/provider-routing";
 
-export { UpstreamError };
+export { UpstreamError, describeAdminKeyError };
 
 export async function isUpstreamConfigured(): Promise<boolean> {
   return isUpstreamConfiguredCore();
@@ -70,13 +71,9 @@ export async function readNonStream(res: Response): Promise<{
 }> {
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    const safeMsg =
-      res.status === 402 || res.status === 429
-        ? "Insufficient balance."
-        : res.status >= 500
-          ? "Upstream tạm thời không khả dụng. Vui lòng thử lại."
-          : `Yêu cầu bị từ chối (mã ${res.status}).`;
-    throw new UpstreamError(res.status, safeMsg, json);
+    // Status từ upstream-level → coi như admin-side key error
+    const safeMsg = `API key của admin gặp sự cố — ${describeAdminKeyError(res.status)}. Vui lòng thử lại sau hoặc báo admin.`;
+    throw new UpstreamError(res.status, safeMsg, json, true);
   }
   const text: string = json?.choices?.[0]?.message?.content ?? "";
   const usage = json?.usage || {};

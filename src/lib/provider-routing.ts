@@ -23,11 +23,27 @@ export const ERROR_COOLDOWN_MS = 5 * 60_000; // sau 5 phút tự cho thử lại
 export class UpstreamError extends Error {
   status: number;
   body: any;
-  constructor(status: number, message: string, body?: any) {
+  /**
+   * adminSide=true: lỗi từ phía admin (key sai, hết quota, provider down).
+   * User không thể tự fix → gateway sẽ báo "API key admin đang lỗi".
+   */
+  adminSide: boolean;
+  constructor(status: number, message: string, body?: any, adminSide = false) {
     super(message);
     this.status = status;
     this.body = body;
+    this.adminSide = adminSide;
   }
+}
+
+// Diễn dịch HTTP status từ upstream sang message user-friendly khi key admin lỗi
+export function describeAdminKeyError(status: number): string {
+  if (status === 401) return "API key của admin bị từ chối (401 — key sai hoặc đã hết hạn)";
+  if (status === 403) return "API key của admin không có quyền truy cập (403 — bị block hoặc thiếu permission)";
+  if (status === 402) return "Tài khoản provider của admin hết tiền/quota (402)";
+  if (status === 429) return "API key của admin đang bị rate-limit (429 — gọi quá nhanh hoặc hết quota tạm thời)";
+  if (status >= 500) return `Provider upstream gặp lỗi (${status} — server provider down)`;
+  return `Provider upstream từ chối yêu cầu (${status})`;
 }
 
 export type ResolvedUpstream = {
@@ -324,6 +340,8 @@ export async function callWithFailover(
   let lastRes: Response | null = null;
   let lastUsed: ResolvedUpstream | null = null;
 
+  let lastStatus = 0;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let u: ResolvedUpstream;
     try {
@@ -337,11 +355,12 @@ export async function callWithFailover(
       const res = await buildRequest(u);
       const status = res.status;
       // Lỗi key-level → failover
-      if (status === 401 || status === 403 || status === 429 || status >= 500) {
+      if (status === 401 || status === 402 || status === 403 || status === 429 || status >= 500) {
         if (u.keyId) await markKeyError(u.keyId);
         lastRes = res;
         lastUsed = u;
-        lastErr = new UpstreamError(status, `Key fail ${status}`);
+        lastStatus = status;
+        lastErr = new UpstreamError(status, `Key fail ${status}`, null, u.source === "PROVIDER");
         // Nếu env fallback, không có key kế → break
         if (u.source === "ENV_FALLBACK") break;
         continue;
@@ -357,11 +376,20 @@ export async function callWithFailover(
     }
   }
 
-  // Hết retry — nếu có response cuối, trả nguyên (caller tự xử status)
+  // Hết retry — phía admin (provider) thì throw rõ ràng để gateway báo lỗi đúng
+  if (lastUsed?.source === "PROVIDER" && lastStatus > 0) {
+    throw new UpstreamError(
+      502,
+      `API key của admin đang lỗi — ${describeAdminKeyError(lastStatus)}. Đã thử ${maxAttempts} key vẫn fail. Vui lòng thử lại sau hoặc báo admin kiểm tra Provider.`,
+      lastRes ? await lastRes.text().catch(() => null) : null,
+      true,
+    );
+  }
+  // Env fallback / network — vẫn trả response cuối nếu có cho caller tự xử
   if (lastRes && lastUsed) {
     return { res: lastRes, used: lastUsed };
   }
-  throw lastErr ?? new UpstreamError(502, "Hết key khả dụng sau retry");
+  throw lastErr ?? new UpstreamError(502, "Hết key khả dụng sau retry", null, true);
 }
 
 // Health check: có ít nhất 1 cách kết nối upstream

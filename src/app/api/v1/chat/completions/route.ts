@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyKey } from "@/lib/api-key";
 import { countTokens, computeCost } from "@/lib/pricing";
-import { callUpstream, readNonStream, UpstreamError, isUpstreamConfigured } from "@/lib/upstream";
+import { callUpstream, readNonStream, UpstreamError, isUpstreamConfigured, describeAdminKeyError } from "@/lib/upstream";
 import { checkApiKeyRateLimit, RATE_LIMIT_PER_MIN } from "@/lib/rate-limit";
 import { tierDiscountField, type Tier } from "@/lib/tier";
 import { formatVND } from "@/lib/format";
@@ -14,8 +14,10 @@ function err(status: number, message: string, type = "invalid_request_error") {
   return NextResponse.json({ error: { message, type, code: status } }, { status });
 }
 
-function upstreamErr(status: number) {
-  return err(status, "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.", "upstream_error");
+function upstreamErr(status: number, customMsg?: string) {
+  // Status từ upstream → admin-side key error
+  const msg = customMsg || `API key của admin đang lỗi — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin kiểm tra Provider.`;
+  return err(502, msg, "upstream_key_error");
 }
 
 async function authenticate(req: Request) {
@@ -134,13 +136,7 @@ export async function POST(req: Request) {
     if (!upstream.ok || !upstream.body) {
       await upstream.text().catch(() => "");
       await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: upstream.status, ip });
-      if (upstream.status === 402 || upstream.status === 429) {
-        return err(upstream.status, "Insufficient balance.", "billing_error");
-      }
-      if (upstream.status >= 500) {
-        return err(502, "Upstream tạm thời không khả dụng. Vui lòng thử lại.", "upstream_error");
-      }
-      return err(upstream.status, `Yêu cầu bị từ chối (mã ${upstream.status}).`, "upstream_error");
+      return upstreamErr(upstream.status);
     }
 
     const encoder = new TextEncoder();
@@ -229,8 +225,9 @@ export async function POST(req: Request) {
     upstream = await callUpstream({ model: model.slug, messages, stream: false, extra });
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
+    const customMsg = e instanceof UpstreamError && e.adminSide ? e.message : undefined;
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status, ip });
-    return upstreamErr(status);
+    return upstreamErr(status, customMsg);
   }
 
   let parsed;
@@ -238,8 +235,9 @@ export async function POST(req: Request) {
     parsed = await readNonStream(upstream);
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
+    const customMsg = e instanceof UpstreamError && e.adminSide ? e.message : undefined;
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status, ip });
-    return upstreamErr(status);
+    return upstreamErr(status, customMsg);
   }
 
   const inputTokens = parsed.promptTokens ?? estInputTokens;

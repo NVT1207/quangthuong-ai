@@ -35,10 +35,15 @@ export function PlaygroundClient({ models }: { models: { slug: string; name: str
       });
       const data = await r.json();
       if (!r.ok) {
-        const isInsufficient = data?.code === "insufficient_balance" || r.status === 402;
-        const text = isInsufficient
-          ? `💸 ${data.error || "Số dư không đủ."}\n\n👉 [Nạp tiền ngay](/topup)`
-          : `❌ Lỗi: ${data.error || r.statusText}`;
+        const code = data?.code;
+        let text: string;
+        if (code === "insufficient_balance" || r.status === 402) {
+          text = `💸 ${data.error || "Số dư không đủ."}\n\n👉 [Nạp tiền ngay](/topup)`;
+        } else if (code === "upstream_key_error") {
+          text = `⚠️ **API key của admin đang lỗi**\n\n${data.error || "Provider upstream gặp sự cố."}\n\nĐây là lỗi từ phía hệ thống, không phải lỗi của bạn. Vui lòng thử lại sau ít phút hoặc báo admin.`;
+        } else {
+          text = `❌ Lỗi: ${data.error || r.statusText}`;
+        }
         setMsgs([...next, { role: "assistant", content: text }]);
       } else {
         setMsgs([...next, { role: "assistant", content: data.message }]);

@@ -14,6 +14,7 @@ import {
   authHeaders,
   isUpstreamConfigured,
   UpstreamError,
+  describeAdminKeyError,
 } from "@/lib/provider-routing";
 import { formatVND } from "@/lib/format";
 
@@ -192,10 +193,13 @@ export async function POST(req: Request) {
     upstream = result.res;
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
+    const msg = e instanceof UpstreamError && e.adminSide
+      ? e.message
+      : `API key của admin gặp sự cố — ${describeAdminKeyError(status)}. Vui lòng thử lại sau hoặc báo admin.`;
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status, ip },
     });
-    return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
+    return err(502, msg, "upstream_key_error");
   }
 
   if (!upstream.ok) {
@@ -203,13 +207,11 @@ export async function POST(req: Request) {
     await prisma.usageLog.create({
       data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: upstream.status, ip },
     });
-    if (upstream.status === 402 || upstream.status === 429) {
-      return safeAnthropicResponse(modelSlug || "claude", estInputTokens, stream);
-    }
-    if (upstream.status >= 500) {
-      return err(502, "Upstream tạm thời không khả dụng. Vui lòng thử lại.", "api_error");
-    }
-    return err(upstream.status, `Yêu cầu bị từ chối (mã ${upstream.status}).`, "api_error");
+    return err(
+      502,
+      `API key của admin đang lỗi — ${describeAdminKeyError(upstream.status)}. Vui lòng thử lại sau hoặc báo admin kiểm tra Provider.`,
+      "upstream_key_error",
+    );
   }
 
   if (stream && upstream.body) {
