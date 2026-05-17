@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { encryptKey, isCipherConfigured } from "@/lib/key-cipher";
+import { encryptKey, isCipherConfigured, getCipherStatus } from "@/lib/key-cipher";
 
 const ALLOWED_PROVIDERS = ["openai", "anthropic", "google", "deepseek", "grok", "meta", "mistral", "other"];
 const ALLOWED_UPTIME = ["good", "warn", "down"];
@@ -25,8 +25,11 @@ export async function DELETE(req: Request) {
 // Tạo Provider inline (khi admin chọn "Tạo provider mới" trong modal Model)
 // Trả providerId để gắn vào Model.
 async function createInlineProvider(np: any): Promise<string> {
-  if (!isCipherConfigured()) {
-    throw new Error("KEY_ENCRYPTION_KEY chưa cấu hình. Sinh: openssl rand -base64 32");
+  const cs = getCipherStatus();
+  if (!cs.ok) {
+    if (cs.reason === "missing") throw new Error("KEY_ENCRYPTION_KEY chưa được set trên Vercel. Vào Settings → Environment Variables → add biến rồi Redeploy.");
+    if (cs.reason === "invalid_base64") throw new Error("KEY_ENCRYPTION_KEY không phải base64 hợp lệ. Sinh lại: openssl rand -base64 32");
+    if (cs.reason === "invalid_length") throw new Error(`KEY_ENCRYPTION_KEY phải là 32 bytes (base64), hiện ${cs.got} bytes. Sinh lại: openssl rand -base64 32`);
   }
   if (!np.name || typeof np.name !== "string") throw new Error("Provider thiếu tên");
   if (!ALLOWED_PROVIDER_TYPES.includes(np.type)) throw new Error("Loại provider không hợp lệ");
