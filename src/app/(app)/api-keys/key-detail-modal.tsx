@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { X, BarChart3, Clock, Hash, DollarSign, Activity, Terminal } from "lucide-react";
+import { X, BarChart3, Clock, Hash, DollarSign, Activity, Terminal, Boxes } from "lucide-react";
 import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 import { CliPanels, type KeyItem, type ModelOpt } from "./cli-panels";
+import { ModelsTab } from "./models-tab";
 
 type Detail = {
   key: { id: string; name: string; prefix: string; suffix: string; enabled: boolean; createdAt: string; lastUsedAt: string | null };
@@ -22,9 +23,10 @@ type Props = {
 };
 
 export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revealed }: Props) {
-  const [tab, setTab] = useState<"stats" | "cli">("stats");
+  const [tab, setTab] = useState<"stats" | "models" | "cli">("stats");
   const [data, setData] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [modelCount, setModelCount] = useState<number | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -79,10 +81,15 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
 
             <div className="flex gap-1 border-b border-white/5 -mx-6 px-6">
               <TabButton active={tab === "stats"} onClick={() => setTab("stats")} icon={<BarChart3 size={13} />}>Thống kê</TabButton>
+              <TabButton active={tab === "models"} onClick={() => setTab("models")} icon={<Boxes size={13} />}>
+                Models{modelCount !== null && <span className="ml-1 text-ink-200/40">({modelCount})</span>}
+              </TabButton>
               <TabButton active={tab === "cli"} onClick={() => setTab("cli")} icon={<Terminal size={13} />}>Cài đặt CLI</TabButton>
             </div>
 
-            {tab === "cli" ? (
+            {tab === "models" ? (
+              <ModelsTab keyId={keyId} onCountChange={setModelCount} />
+            ) : tab === "cli" ? (
               <CliPanels
                 keys={[keyItem]}
                 models={models}

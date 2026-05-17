@@ -80,6 +80,15 @@ export async function POST(req: Request) {
   if (key.user.status === "BANNED") return err(403, "Account banned", "permission_error");
   if (!model || !model.active) return err(404, `Model '${modelSlug}' not found`, "not_found_error");
 
+  // Key phải subscribe model này (mỗi key tự chọn model trong /api-keys → Xem chi tiết → Models)
+  const sub = await prisma.apiKeyModel.findUnique({
+    where: { apiKeyId_modelId: { apiKeyId: key.id, modelId: model.id } },
+    select: { enabled: true },
+  });
+  if (!sub || !sub.enabled) {
+    return err(403, `API key chưa được kích hoạt cho model '${modelSlug}'. Vào /api-keys → Xem chi tiết → tab Models để thêm/bật model.`, "permission_error");
+  }
+
   const rl = await checkApiKeyRateLimit(key.id);
   if (!rl.ok) return err(429, `Rate limit: tối đa ${RATE_LIMIT_PER_MIN} requests/phút/key. Đã dùng ${rl.count}. Đợi 60s rồi thử lại.`, "rate_limit_error");
 

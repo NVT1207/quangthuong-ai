@@ -63,6 +63,23 @@ model ApiKey {
   createdAt    DateTime   @default(now())
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   usage        UsageLog[]
+  models       ApiKeyModel[]
+}
+
+// Mỗi API key user tạo phải subscribe vào N model admin để được gọi.
+// Gateway check ApiKeyModel.where({ apiKeyId, modelId, enabled: true }) trước khi forward.
+model ApiKeyModel {
+  id        String   @id @default(cuid())
+  apiKeyId  String
+  modelId   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  apiKey    ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  model     Model    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([apiKeyId, modelId])
+  @@index([apiKeyId])
+  @@index([modelId])
 }
 
 model Model {
@@ -98,6 +115,8 @@ model Model {
   // === Deprecated: provider relation (giữ nullable cho backward-compat) ===
   providerId    String?
   providerRef   Provider? @relation(fields: [providerId], references: [id])
+  // Reverse relation cho ApiKeyModel
+  apiKeySubs    ApiKeyModel[]
 
   @@index([providerId])
 }

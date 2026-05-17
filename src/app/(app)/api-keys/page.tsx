@@ -20,6 +20,7 @@ export default async function ApiKeysPage() {
     prisma.apiKey.findMany({
       where: { userId, revokedAt: null },
       orderBy: { createdAt: "desc" },
+      include: { _count: { select: { models: true } } },
     }),
     prisma.model.findMany({
       where: { active: true, category: "text" },
@@ -52,7 +53,6 @@ export default async function ApiKeysPage() {
       <KeysClient
         baseUrl={baseUrl}
         models={models}
-        modelCount={models.length}
         initial={keys.map((k) => {
           const st = statMap.get(k.id);
           return {
@@ -63,6 +63,7 @@ export default async function ApiKeysPage() {
             enabled: k.enabled,
             totalCost: st?.totalCost ?? 0,
             totalRequests: st?.totalRequests ?? 0,
+            subscribedCount: k._count.models,
             createdAt: formatDateTime(k.createdAt),
             lastUsedAt: k.lastUsedAt ? formatDateTime(k.lastUsedAt) : null,
           };

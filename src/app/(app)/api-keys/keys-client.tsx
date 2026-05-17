@@ -14,6 +14,7 @@ type Key = {
   enabled: boolean;
   totalCost: number;
   totalRequests: number;
+  subscribedCount: number;
   createdAt: string;
   lastUsedAt: string | null;
 };
@@ -21,11 +22,10 @@ type Key = {
 type Props = {
   initial: Key[];
   models: ModelOpt[];
-  modelCount: number;
   baseUrl: string;
 };
 
-export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
+export function KeysClient({ initial, models, baseUrl }: Props) {
   const router = useRouter();
   const [keys, setKeys] = useState(initial);
   const [creating, setCreating] = useState(false);
@@ -60,7 +60,7 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
     const data = await r.json();
     if (!r.ok) { alert(data.error || "Lỗi"); return; }
     setRevealedKey(data.fullKey);
-    setKeys([{ ...data.key, enabled: true, totalCost: 0, totalRequests: 0 }, ...keys]);
+    setKeys([{ ...data.key, enabled: true, totalCost: 0, totalRequests: 0, subscribedCount: 0 }, ...keys]);
     // Auto-reveal key vừa tạo trong list — user thấy ngay full key, không cần bấm 👁.
     // Reload trang sẽ về dạng ẩn (vì revealed state chỉ in-memory, không persist).
     setRevealed((prev) => ({ ...prev, [data.key.id]: data.fullKey }));
@@ -270,9 +270,15 @@ export function KeysClient({ initial, models, modelCount, baseUrl }: Props) {
                       </div>
                     </td>
                     <td className="table-td">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-300 border border-sky-500/20 text-xs font-mono">
-                        {modelCount} model(s)
-                      </span>
+                      {k.subscribedCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-300 border border-sky-500/20 text-xs font-mono">
+                          {k.subscribedCount} model(s)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-honey-500/10 text-honey-300 border border-honey-500/20 text-xs font-mono">
+                          chưa có
+                        </span>
+                      )}
                     </td>
                     <td className="table-td font-mono">{formatNumber(k.totalRequests)}</td>
                     <td className="table-td font-mono">
