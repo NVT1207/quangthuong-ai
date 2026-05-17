@@ -155,17 +155,41 @@ model ProviderKey {
 }
 
 model TopupRequest {
-  id          String    @id @default(cuid())
-  userId      String
-  amount      Float
-  method      String
-  reference   String?
-  note        String?
-  status      String    @default("PENDING")
-  processedBy String?
-  processedAt DateTime?
-  createdAt   DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String           @id @default(cuid())
+  userId         String
+  amount         Float
+  method         String
+  reference      String?          @unique
+  note           String?
+  status         String           @default("PENDING")
+  processedBy    String?
+  processedAt    DateTime?
+  autoApproved   Boolean          @default(false)
+  receivedAmount Float?
+  createdAt      DateTime         @default(now())
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankTx         BankTransaction?
+}
+
+// Log toàn bộ giao dịch ngân hàng nhận từ webhook (Sepay/Casso).
+// Idempotent qua gatewayTxId; match với TopupRequest qua reference parse từ content.
+model BankTransaction {
+  id              String        @id @default(cuid())
+  gatewayTxId     String        @unique // id từ provider (Sepay id)
+  gatewayName     String        // "Vietinbank" / "Sepay" v.v.
+  accountNumber   String?
+  amount          Float
+  content         String        @db.Text
+  transferType    String        // "in" | "out"
+  reference       String?       // QT-xxxxx extracted từ content
+  matchedTopupId  String?       @unique
+  matchedTopup    TopupRequest? @relation(fields: [matchedTopupId], references: [id])
+  transactionDate DateTime
+  rawPayload      Json?
+  createdAt       DateTime      @default(now())
+
+  @@index([reference])
+  @@index([transactionDate])
 }
 
 model Transaction {

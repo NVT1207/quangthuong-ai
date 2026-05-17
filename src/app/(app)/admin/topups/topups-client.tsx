@@ -7,6 +7,8 @@ import { formatVND, formatDateTime } from "@/lib/format";
 type T = {
   id: string; amount: number; method: string; reference: string | null; note: string | null;
   status: string; createdAt: string; processedAt: string | null;
+  autoApproved: boolean;
+  receivedAmount: number | null;
   userEmail: string; userName: string | null;
 };
 
@@ -53,10 +55,22 @@ export function TopupsClient({ items }: { items: T[] }) {
                 <p className="font-medium text-sm">{t.userName || "—"}</p>
                 <p className="text-xs text-ink-200/50">{t.userEmail}</p>
               </td>
-              <td className="table-td text-right font-semibold text-honey-300">{formatVND(t.amount)}</td>
-              <td className="table-td">{t.method === "bank" ? "Bank" : "MoMo"}</td>
-              <td className="table-td text-ink-200/70">{t.reference || "—"}</td>
-              <td className="table-td"><span className={`badge ${STATUS[t.status]}`}>{t.status}</span></td>
+              <td className="table-td text-right font-semibold text-honey-300">
+                {formatVND(t.amount)}
+                {t.receivedAmount != null && t.receivedAmount !== t.amount && (
+                  <p className="text-[10px] font-normal text-ink-200/60 mt-0.5">
+                    Thực nhận: <span className="text-emerald-300">{formatVND(t.receivedAmount)}</span>
+                  </p>
+                )}
+              </td>
+              <td className="table-td">{t.method === "bank" || t.method === "qr" ? "Bank/QR" : "MoMo"}</td>
+              <td className="table-td text-ink-200/70 font-mono text-xs">{t.reference || "—"}</td>
+              <td className="table-td">
+                <span className={`badge ${STATUS[t.status]}`}>{t.status}</span>
+                {t.autoApproved && t.status === "APPROVED" && (
+                  <span className="badge bg-sky-500/15 text-sky-300 ml-1">Tự động</span>
+                )}
+              </td>
               <td className="table-td text-right">
                 {t.status === "PENDING" ? (
                   <div className="flex gap-1 justify-end">
