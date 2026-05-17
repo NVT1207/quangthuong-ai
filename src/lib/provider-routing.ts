@@ -66,6 +66,24 @@ function stripTrailing(u: string) {
   return u.replace(/\/+$/, "");
 }
 
+// Detect: nếu apiType là ANTHROPIC/GEMINI nhưng baseUrl không trỏ API chính chủ → gateway OpenAI-compat
+function normalizeProviderType(declared: ProviderType, baseUrl: string): ProviderType {
+  const host = (() => {
+    try {
+      return new URL(baseUrl).hostname.toLowerCase();
+    } catch {
+      return baseUrl.toLowerCase();
+    }
+  })();
+  if (declared === "ANTHROPIC" && !host.endsWith("anthropic.com")) {
+    return "OPENAI_COMPATIBLE";
+  }
+  if (declared === "GEMINI" && !host.endsWith("googleapis.com") && !host.endsWith("google.com")) {
+    return "OPENAI_COMPATIBLE";
+  }
+  return declared;
+}
+
 function envFallback(modelSlug: string): ResolvedUpstream {
   const baseUrl = stripTrailing(process.env.BEEKNOEE_BASE_URL || "");
   const apiKey = process.env.BEEKNOEE_API_KEY || "";
@@ -172,14 +190,19 @@ export async function resolveUpstream(
         `Không decrypt được API key của model '${modelSlug}': ${e?.message || e}`
       );
     }
-    const type = (model.apiType || "OPENAI_COMPATIBLE") as ProviderType;
-    const baseUrl = stripTrailing(model.apiBaseUrl || DEFAULT_BASE[type] || "");
+    const declaredType = (model.apiType || "OPENAI_COMPATIBLE") as ProviderType;
+    const baseUrl = stripTrailing(model.apiBaseUrl || DEFAULT_BASE[declaredType] || "");
     if (!baseUrl) {
       throw new UpstreamError(
         503,
-        `Model '${modelSlug}' thiếu Base URL cho type ${type}.`
+        `Model '${modelSlug}' thiếu Base URL cho type ${declaredType}.`
       );
     }
+    // Heuristic quan trọng: admin có thể chọn apiType=ANTHROPIC/GEMINI cho mục đích branding/logo,
+    // nhưng baseUrl thực tế trỏ tới gateway OpenAI-compat (vd ChiaSeGPU, OpenRouter, LiteLLM proxy...).
+    // Khi đó gateway không hiểu /messages + x-api-key của Anthropic → trả 400/403.
+    // → Nếu baseUrl KHÔNG phải API chính chủ thì luôn coi như OPENAI_COMPATIBLE.
+    const type = normalizeProviderType(declaredType, baseUrl);
     return {
       source: "PROVIDER",
       baseUrl,
@@ -229,14 +252,15 @@ export async function resolveUpstream(
       );
     }
 
-    const type = provider.type as ProviderType;
-    const baseUrl = stripTrailing(provider.baseUrl || DEFAULT_BASE[type] || "");
+    const declaredType = provider.type as ProviderType;
+    const baseUrl = stripTrailing(provider.baseUrl || DEFAULT_BASE[declaredType] || "");
     if (!baseUrl) {
       throw new UpstreamError(
         503,
-        `Provider '${provider.name}' thiếu baseUrl cho type ${type}.`
+        `Provider '${provider.name}' thiếu baseUrl cho type ${declaredType}.`
       );
     }
+    const type = normalizeProviderType(declaredType, baseUrl);
 
     return {
       source: "PROVIDER",
