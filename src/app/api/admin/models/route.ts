@@ -2,13 +2,22 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { encryptKey, isCipherConfigured, getCipherStatus } from "@/lib/key-cipher";
+import { encryptKey, getCipherStatus } from "@/lib/key-cipher";
 
 const ALLOWED_PROVIDERS = ["openai", "anthropic", "google", "deepseek", "grok", "meta", "mistral", "other"];
 const ALLOWED_UPTIME = ["good", "warn", "down"];
 const ALLOWED_CATEGORIES = ["text", "embedding", "image", "video", "tts"];
-const ALLOWED_PROVIDER_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
-const ALLOWED_ROUTING = ["ROUND_ROBIN", "FAILOVER", "RANDOM", "LEAST_USED"];
+const ALLOWED_API_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
+
+const API_TYPES_NEED_BASEURL = new Set(["OLLAMA", "OPENAI_COMPATIBLE"]);
+
+function ensureCipherReady() {
+  const cs = getCipherStatus();
+  if (cs.ok) return;
+  if (cs.reason === "missing") throw new Error("KEY_ENCRYPTION_KEY chưa được set trên Vercel. Vào Settings → Environment Variables → add biến rồi Redeploy.");
+  if (cs.reason === "invalid_base64") throw new Error("KEY_ENCRYPTION_KEY không phải base64 hợp lệ. Sinh lại: openssl rand -base64 32");
+  if (cs.reason === "invalid_length") throw new Error(`KEY_ENCRYPTION_KEY phải là 32 bytes (base64), hiện ${cs.got} bytes. Sinh lại: openssl rand -base64 32`);
+}
 
 export async function DELETE(req: Request) {
   const session = await getServerSession(authOptions);
@@ -17,53 +26,8 @@ export async function DELETE(req: Request) {
   if (url.searchParams.get("all") !== "1") {
     return NextResponse.json({ error: "Thiếu ?all=1 để xác nhận bulk delete" }, { status: 400 });
   }
-  // UsageLog dùng modelSlug (string), không FK → an toàn xóa Model.
   const r = await prisma.model.deleteMany({});
   return NextResponse.json({ ok: true, deleted: r.count });
-}
-
-// Tạo Provider inline (khi admin chọn "Tạo provider mới" trong modal Model)
-// Trả providerId để gắn vào Model.
-async function createInlineProvider(np: any): Promise<string> {
-  const cs = getCipherStatus();
-  if (!cs.ok) {
-    if (cs.reason === "missing") throw new Error("KEY_ENCRYPTION_KEY chưa được set trên Vercel. Vào Settings → Environment Variables → add biến rồi Redeploy.");
-    if (cs.reason === "invalid_base64") throw new Error("KEY_ENCRYPTION_KEY không phải base64 hợp lệ. Sinh lại: openssl rand -base64 32");
-    if (cs.reason === "invalid_length") throw new Error(`KEY_ENCRYPTION_KEY phải là 32 bytes (base64), hiện ${cs.got} bytes. Sinh lại: openssl rand -base64 32`);
-  }
-  if (!np.name || typeof np.name !== "string") throw new Error("Provider thiếu tên");
-  if (!ALLOWED_PROVIDER_TYPES.includes(np.type)) throw new Error("Loại provider không hợp lệ");
-  const routing = ALLOWED_ROUTING.includes(np.routing) ? np.routing : "ROUND_ROBIN";
-  let baseUrl: string | null = null;
-  if (typeof np.baseUrl === "string" && np.baseUrl.trim()) {
-    baseUrl = np.baseUrl.trim().replace(/\/+$/, "");
-  }
-  if ((np.type === "OPENAI_COMPATIBLE" || np.type === "OLLAMA") && !baseUrl) {
-    throw new Error(`Provider loại ${np.type} cần baseUrl`);
-  }
-  const rawKeys: string[] = Array.isArray(np.keys)
-    ? np.keys.filter((k: any) => typeof k === "string" && k.trim())
-    : [];
-  if (rawKeys.length === 0) throw new Error("Provider cần ít nhất 1 API key");
-
-  const created = await prisma.provider.create({
-    data: {
-      name: String(np.name).trim(),
-      description: np.description ? String(np.description) : null,
-      type: np.type,
-      baseUrl,
-      routing,
-      enabled: np.enabled !== false,
-      keys: {
-        create: rawKeys.map((k, i) => ({
-          encryptedKey: encryptKey(k.trim()),
-          prefix: k.trim().slice(0, 8),
-          label: np.keyLabels?.[i] || `Key ${i + 1}`,
-        })),
-      },
-    },
-  });
-  return created.id;
 }
 
 export async function POST(req: Request) {
@@ -76,14 +40,25 @@ export async function POST(req: Request) {
   const category = ALLOWED_CATEGORIES.includes(b.category) ? b.category : "text";
   const priceUnit = typeof b.priceUnit === "string" && b.priceUnit.trim() ? b.priceUnit.trim() : "1M tokens";
 
-  // Inline provider creation (optional)
-  let providerId: string | null = b.providerId ? String(b.providerId) : null;
-  if (b.newProvider && typeof b.newProvider === "object") {
-    try {
-      providerId = await createInlineProvider(b.newProvider);
-    } catch (e: any) {
-      return NextResponse.json({ error: `Lỗi tạo provider: ${e?.message || e}` }, { status: 400 });
+  // === API config ===
+  const apiType = ALLOWED_API_TYPES.includes(b.apiType) ? b.apiType : "OPENAI_COMPATIBLE";
+  let apiBaseUrl: string | null = null;
+  if (typeof b.apiBaseUrl === "string" && b.apiBaseUrl.trim()) {
+    apiBaseUrl = b.apiBaseUrl.trim().replace(/\/+$/, "");
+  }
+  if (API_TYPES_NEED_BASEURL.has(apiType) && !apiBaseUrl) {
+    return NextResponse.json({ error: `Loại API ${apiType} cần Base URL` }, { status: 400 });
+  }
+
+  let apiKeyEnc: string | null = null;
+  let apiKeyPrefix: string | null = null;
+  if (typeof b.apiKey === "string" && b.apiKey.trim()) {
+    try { ensureCipherReady(); } catch (e: any) {
+      return NextResponse.json({ error: e?.message || "Cipher chưa cấu hình" }, { status: 500 });
     }
+    const rawKey = b.apiKey.trim();
+    apiKeyEnc = encryptKey(rawKey);
+    apiKeyPrefix = rawKey.slice(0, 8);
   }
 
   try {
@@ -105,7 +80,10 @@ export async function POST(req: Request) {
         speedTps: Number(b.speedTps) || 0,
         latencyMs: Number(b.latencyMs) || 0,
         uptimeStatus: uptime,
-        providerId,
+        apiType,
+        apiBaseUrl,
+        apiKeyEnc,
+        apiKeyPrefix,
         upstreamSlug: b.upstreamSlug ? String(b.upstreamSlug).trim() : null,
       },
     });

@@ -2,46 +2,17 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { encryptKey, isCipherConfigured, getCipherStatus } from "@/lib/key-cipher";
+import { encryptKey, getCipherStatus } from "@/lib/key-cipher";
 
-const ALLOWED_PROVIDER_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
-const ALLOWED_ROUTING = ["ROUND_ROBIN", "FAILOVER", "RANDOM", "LEAST_USED"];
+const ALLOWED_API_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
+const API_TYPES_NEED_BASEURL = new Set(["OLLAMA", "OPENAI_COMPATIBLE"]);
 
-async function createInlineProvider(np: any): Promise<string> {
+function ensureCipherReady() {
   const cs = getCipherStatus();
-  if (!cs.ok) {
-    if (cs.reason === "missing") throw new Error("KEY_ENCRYPTION_KEY chưa được set trên Vercel. Vào Settings → Environment Variables → add biến rồi Redeploy.");
-    if (cs.reason === "invalid_base64") throw new Error("KEY_ENCRYPTION_KEY không phải base64 hợp lệ. Sinh lại: openssl rand -base64 32");
-    if (cs.reason === "invalid_length") throw new Error(`KEY_ENCRYPTION_KEY phải là 32 bytes (base64), hiện ${cs.got} bytes. Sinh lại: openssl rand -base64 32`);
-  }
-  if (!np.name) throw new Error("Provider thiếu tên");
-  if (!ALLOWED_PROVIDER_TYPES.includes(np.type)) throw new Error("Loại provider không hợp lệ");
-  const routing = ALLOWED_ROUTING.includes(np.routing) ? np.routing : "ROUND_ROBIN";
-  let baseUrl: string | null = null;
-  if (typeof np.baseUrl === "string" && np.baseUrl.trim()) baseUrl = np.baseUrl.trim().replace(/\/+$/, "");
-  if ((np.type === "OPENAI_COMPATIBLE" || np.type === "OLLAMA") && !baseUrl) {
-    throw new Error(`Provider loại ${np.type} cần baseUrl`);
-  }
-  const rawKeys: string[] = Array.isArray(np.keys)
-    ? np.keys.filter((k: any) => typeof k === "string" && k.trim())
-    : [];
-  if (rawKeys.length === 0) throw new Error("Provider cần ít nhất 1 API key");
-  const created = await prisma.provider.create({
-    data: {
-      name: String(np.name).trim(),
-      description: np.description ? String(np.description) : null,
-      type: np.type, baseUrl, routing,
-      enabled: np.enabled !== false,
-      keys: {
-        create: rawKeys.map((k, i) => ({
-          encryptedKey: encryptKey(k.trim()),
-          prefix: k.trim().slice(0, 8),
-          label: np.keyLabels?.[i] || `Key ${i + 1}`,
-        })),
-      },
-    },
-  });
-  return created.id;
+  if (cs.ok) return;
+  if (cs.reason === "missing") throw new Error("KEY_ENCRYPTION_KEY chưa được set trên Vercel.");
+  if (cs.reason === "invalid_base64") throw new Error("KEY_ENCRYPTION_KEY không phải base64 hợp lệ.");
+  if (cs.reason === "invalid_length") throw new Error(`KEY_ENCRYPTION_KEY phải là 32 bytes (base64), hiện ${cs.got} bytes.`);
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -67,19 +38,50 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (b.uptimeStatus !== undefined && ["good", "warn", "down"].includes(b.uptimeStatus)) data.uptimeStatus = b.uptimeStatus;
   if (b.upstreamSlug !== undefined) data.upstreamSlug = b.upstreamSlug ? String(b.upstreamSlug).trim() : null;
 
-  // Provider handling: hoặc set providerId từ dropdown, hoặc tạo inline
-  if (b.newProvider && typeof b.newProvider === "object") {
-    try {
-      data.providerId = await createInlineProvider(b.newProvider);
-    } catch (e: any) {
-      return NextResponse.json({ error: `Lỗi tạo provider: ${e?.message || e}` }, { status: 400 });
+  // === API config ===
+  if (b.apiType !== undefined) {
+    if (!ALLOWED_API_TYPES.includes(b.apiType)) return NextResponse.json({ error: "apiType không hợp lệ" }, { status: 400 });
+    data.apiType = b.apiType;
+  }
+  if (b.apiBaseUrl !== undefined) {
+    if (b.apiBaseUrl === null || b.apiBaseUrl === "") data.apiBaseUrl = null;
+    else data.apiBaseUrl = String(b.apiBaseUrl).trim().replace(/\/+$/, "");
+  }
+  // Chỉ encrypt + lưu key mới nếu admin nhập (chuỗi khác rỗng). Nếu rỗng/undefined → giữ key cũ.
+  if (typeof b.apiKey === "string" && b.apiKey.trim()) {
+    try { ensureCipherReady(); } catch (e: any) {
+      return NextResponse.json({ error: e?.message }, { status: 500 });
     }
-  } else if (b.providerId !== undefined) {
-    data.providerId = b.providerId ? String(b.providerId) : null;
+    const raw = b.apiKey.trim();
+    data.apiKeyEnc = encryptKey(raw);
+    data.apiKeyPrefix = raw.slice(0, 8);
+  } else if (b.apiKey === null) {
+    // Cho phép admin set null để xóa key
+    data.apiKeyEnc = null;
+    data.apiKeyPrefix = null;
   }
 
-  const m = await prisma.model.update({ where: { id: params.id }, data });
-  return NextResponse.json(m);
+  // Validate baseUrl required cho OLLAMA/OPENAI_COMPATIBLE
+  if (data.apiType && API_TYPES_NEED_BASEURL.has(data.apiType)) {
+    const finalBaseUrl = data.apiBaseUrl !== undefined ? data.apiBaseUrl : null;
+    // Cần check DB nếu không update apiBaseUrl
+    if (data.apiBaseUrl === undefined) {
+      const current = await prisma.model.findUnique({ where: { id: params.id }, select: { apiBaseUrl: true } });
+      if (!current?.apiBaseUrl) {
+        return NextResponse.json({ error: `Loại API ${data.apiType} cần Base URL` }, { status: 400 });
+      }
+    } else if (!finalBaseUrl) {
+      return NextResponse.json({ error: `Loại API ${data.apiType} cần Base URL` }, { status: 400 });
+    }
+  }
+
+  try {
+    const m = await prisma.model.update({ where: { id: params.id }, data });
+    return NextResponse.json(m);
+  } catch (e: any) {
+    if (e.code === "P2002") return NextResponse.json({ error: "Slug đã tồn tại" }, { status: 409 });
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {

@@ -10,47 +10,29 @@ export const dynamic = "force-dynamic";
 export default async function AdminModelsPage() {
   const session = await getServerSession(authOptions);
   if (session?.user.role !== "ADMIN") redirect("/dashboard");
-  const [models, providers] = await Promise.all([
-    prisma.model.findMany({ orderBy: { displayName: "asc" } }),
-    prisma.provider.findMany({
-      orderBy: { name: "asc" },
-      include: {
-        keys: { orderBy: { createdAt: "asc" } },
-        _count: { select: { models: true } },
-      },
-    }),
-  ]);
+  const models = await prisma.model.findMany({ orderBy: { displayName: "asc" } });
 
-  const providersOut = providers.map((p) => ({
-    id: p.id,
-    name: p.name,
-    type: p.type,
-    baseUrl: p.baseUrl,
-    routing: p.routing,
-    enabled: p.enabled,
-    modelsCount: p._count.models,
-    keys: p.keys.map((k) => {
-      let plainKey = "";
-      try { plainKey = decryptKey(k.encryptedKey); } catch { plainKey = ""; }
-      return {
-        id: k.id,
-        label: k.label,
-        enabled: k.enabled,
-        plainKey,
-      };
-    }),
-  }));
+  const modelsOut = models.map((m) => {
+    let plainKey = "";
+    if (m.apiKeyEnc) {
+      try { plainKey = decryptKey(m.apiKeyEnc); } catch { plainKey = ""; }
+    }
+    return {
+      ...m,
+      createdAt: m.createdAt.toISOString(),
+      lastUsedAt: m.lastUsedAt?.toISOString() ?? null,
+      lastErrorAt: m.lastErrorAt?.toISOString() ?? null,
+      apiKey: plainKey, // plaintext cho admin
+    };
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Quản lý Models</h1>
-        <p className="text-sm text-ink-200/60">Thêm/sửa model, gán provider + key</p>
+        <p className="text-sm text-ink-200/60">Thêm/sửa model + API key upstream</p>
       </div>
-      <ModelsAdminClient
-        initial={models.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() }))}
-        providers={providersOut}
-      />
+      <ModelsAdminClient initial={modelsOut} />
     </div>
   );
 }

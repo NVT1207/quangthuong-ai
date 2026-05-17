@@ -84,9 +84,19 @@ model Model {
   latencyMs     Float     @default(0)
   uptimeStatus  String    @default("good")
   createdAt     DateTime  @default(now())
-  // Multi-provider routing (nullable → env fallback)
+  // === Upstream config (1 model = 1 key) ===
+  apiType       String    @default("OPENAI_COMPATIBLE") // OPENAI | ANTHROPIC | GEMINI | OLLAMA | OPENAI_COMPATIBLE
+  apiBaseUrl    String? // null → endpoint mặc định theo apiType
+  apiKeyEnc     String? // AES-256-GCM ciphertext của API key; null → fallback env
+  apiKeyPrefix  String? // 8 ký tự đầu để show UI
+  upstreamSlug  String? // tên model thật ở upstream; null → dùng `slug`
+  // === Stats theo key (rolling) ===
+  totalRequests Int       @default(0)
+  totalErrors   Int       @default(0)
+  lastUsedAt    DateTime?
+  lastErrorAt   DateTime?
+  // === Deprecated: provider relation (giữ nullable cho backward-compat) ===
   providerId    String?
-  upstreamSlug  String? // tên model thật ở provider; null → dùng `slug`
   providerRef   Provider? @relation(fields: [providerId], references: [id])
 
   @@index([providerId])

@@ -145,68 +145,96 @@ export async function resolveUpstream(
     throw new UpstreamError(404, `Model '${modelSlug}' not found`);
   }
 
-  // Không gán provider → env fallback
-  if (!model.providerRef) {
-    return envFallback(model.upstreamSlug ?? modelSlug);
+  // === ƯU TIÊN 1: Key gắn trực tiếp vào Model (flow mới, 1 model = 1 key) ===
+  if (model.apiKeyEnc) {
+    let plaintext: string;
+    try {
+      plaintext = decryptKey(model.apiKeyEnc);
+    } catch (e: any) {
+      throw new UpstreamError(
+        500,
+        `Không decrypt được API key của model '${modelSlug}': ${e?.message || e}`
+      );
+    }
+    const type = (model.apiType || "OPENAI_COMPATIBLE") as ProviderType;
+    const baseUrl = stripTrailing(model.apiBaseUrl || DEFAULT_BASE[type] || "");
+    if (!baseUrl) {
+      throw new UpstreamError(
+        503,
+        `Model '${modelSlug}' thiếu Base URL cho type ${type}.`
+      );
+    }
+    return {
+      source: "PROVIDER",
+      baseUrl,
+      apiKey: plaintext,
+      providerType: type,
+      upstreamModelSlug: model.upstreamSlug ?? model.slug,
+    };
   }
 
-  const provider = model.providerRef;
-  if (!provider.enabled) {
-    throw new UpstreamError(
-      503,
-      `Provider '${provider.name}' đang tắt — liên hệ admin.`
+  // === ƯU TIÊN 2: Provider relation cũ (backward-compat cho data cũ) ===
+  if (model.providerRef) {
+    const provider = model.providerRef;
+    if (!provider.enabled) {
+      throw new UpstreamError(
+        503,
+        `Provider '${provider.name}' đang tắt — liên hệ admin.`
+      );
+    }
+    if (provider.keys.length === 0) {
+      throw new UpstreamError(
+        503,
+        `Provider '${provider.name}' chưa có API key — liên hệ admin.`
+      );
+    }
+
+    const picked = await pickKeyByStrategy(
+      provider.id,
+      provider.routing,
+      provider.rrCursor,
+      provider.keys
     );
-  }
-  if (provider.keys.length === 0) {
-    throw new UpstreamError(
-      503,
-      `Provider '${provider.name}' chưa có API key — liên hệ admin.`
-    );
+    if (!picked) {
+      throw new UpstreamError(
+        503,
+        `Hết key khả dụng cho provider '${provider.name}'. Tất cả key đang trong cooldown.`
+      );
+    }
+
+    let plaintext: string;
+    try {
+      plaintext = decryptKey(picked.encryptedKey);
+    } catch (e: any) {
+      await markKeyError(picked.id).catch(() => undefined);
+      throw new UpstreamError(
+        500,
+        `Không decrypt được API key (${picked.id}): ${e?.message || e}`
+      );
+    }
+
+    const type = provider.type as ProviderType;
+    const baseUrl = stripTrailing(provider.baseUrl || DEFAULT_BASE[type] || "");
+    if (!baseUrl) {
+      throw new UpstreamError(
+        503,
+        `Provider '${provider.name}' thiếu baseUrl cho type ${type}.`
+      );
+    }
+
+    return {
+      source: "PROVIDER",
+      providerId: provider.id,
+      keyId: picked.id,
+      baseUrl,
+      apiKey: plaintext,
+      providerType: type,
+      upstreamModelSlug: model.upstreamSlug ?? model.slug,
+    };
   }
 
-  const picked = await pickKeyByStrategy(
-    provider.id,
-    provider.routing,
-    provider.rrCursor,
-    provider.keys
-  );
-  if (!picked) {
-    throw new UpstreamError(
-      503,
-      `Hết key khả dụng cho provider '${provider.name}'. Tất cả key đang trong cooldown.`
-    );
-  }
-
-  let plaintext: string;
-  try {
-    plaintext = decryptKey(picked.encryptedKey);
-  } catch (e: any) {
-    // Key giải mã được fail → mark error rồi báo lỗi
-    await markKeyError(picked.id).catch(() => undefined);
-    throw new UpstreamError(
-      500,
-      `Không decrypt được API key (${picked.id}): ${e?.message || e}`
-    );
-  }
-
-  const type = provider.type as ProviderType;
-  const baseUrl = stripTrailing(provider.baseUrl || DEFAULT_BASE[type] || "");
-  if (!baseUrl) {
-    throw new UpstreamError(
-      503,
-      `Provider '${provider.name}' thiếu baseUrl cho type ${type}.`
-    );
-  }
-
-  return {
-    source: "PROVIDER",
-    providerId: provider.id,
-    keyId: picked.id,
-    baseUrl,
-    apiKey: plaintext,
-    providerType: type,
-    upstreamModelSlug: model.upstreamSlug ?? model.slug,
-  };
+  // === ƯU TIÊN 3: Env fallback ===
+  return envFallback(model.upstreamSlug ?? modelSlug);
 }
 
 export async function markKeySuccess(keyId: string): Promise<void> {
@@ -341,10 +369,14 @@ export async function isUpstreamConfigured(): Promise<boolean> {
   if (process.env.BEEKNOEE_BASE_URL && process.env.BEEKNOEE_API_KEY) {
     return true;
   }
-  const count = await prisma.provider
-    .count({
-      where: { enabled: true, keys: { some: { enabled: true } } },
-    })
+  // Model có apiKeyEnc trực tiếp
+  const modelCount = await prisma.model
+    .count({ where: { active: true, apiKeyEnc: { not: null } } })
     .catch(() => 0);
-  return count > 0;
+  if (modelCount > 0) return true;
+  // Hoặc legacy provider
+  const provCount = await prisma.provider
+    .count({ where: { enabled: true, keys: { some: { enabled: true } } } })
+    .catch(() => 0);
+  return provCount > 0;
 }
