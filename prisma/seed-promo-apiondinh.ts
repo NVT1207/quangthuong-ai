@@ -15,7 +15,7 @@ async function main() {
   const code = "APIONDINH";
   const data = {
     code,
-    description: "Khuyến mãi mở khóa API Beeknoee — +10% bonus cho lần đầu nạp tối thiểu 3.000.000₫",
+    description: "Khuyến mãi mở khóa API Quang Thưởng AI — +10% bonus cho lần đầu nạp tối thiểu 3.000.000₫",
     bonusType: "PERCENT",
     bonusPercent: 10,
     bonusAmount: 0,

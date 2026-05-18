@@ -80,7 +80,7 @@ export function ThirdPartySetupCard({ keyItem, models, baseUrl, revealed }: Prop
 
   const preset = PRESETS.find((p) => p.id === presetId)!;
   const cleanBase = baseUrl.replace(/\/+$/, "");
-  // Beeknoee routes thực tế nằm ở /api/v1/messages và /api/v1/chat/completions.
+  // Quang Thưởng AI routes thực tế nằm ở /api/v1/messages và /api/v1/chat/completions.
   // → Anthropic SDK append "/v1/messages" → base phải là "<root>/api".
   // → OpenAI SDK append "/chat/completions" → base phải là "<root>/api/v1".
   const anthropicBase = `${cleanBase}/api`;
@@ -123,7 +123,7 @@ export function ThirdPartySetupCard({ keyItem, models, baseUrl, revealed }: Prop
         <Sparkles size={14} className="text-sky-300 mt-0.5 shrink-0" />
         <span className="flex-1">
           Dùng để kết nối các ứng dụng / SDK bên thứ ba (Claude SDK, Cline, Cherry Studio, LobeChat, Open WebUI, Continue, Cursor...).
-          Beeknoee hỗ trợ <b>cả 2 chuẩn</b>: Anthropic Messages API và OpenAI-compatible Chat Completions.
+          Quang Thưởng AI hỗ trợ <b>cả 2 chuẩn</b>: Anthropic Messages API và OpenAI-compatible Chat Completions.
         </span>
       </div>
 

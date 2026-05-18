@@ -30,8 +30,8 @@ Tài khoản mẫu sau khi seed:
 
 | Vai trò | Email | Mật khẩu | Số dư |
 |---|---|---|---|
-| Admin | `admin@beeknoee.local` | `admin123` | 1.000.000 ₫ |
-| User | `demo@beeknoee.local` | `demo123` | 100.000 ₫ |
+| Admin | `admin@quangthuong.local` | `admin123` | 1.000.000 ₫ |
+| User | `demo@quangthuong.local` | `demo123` | 100.000 ₫ |
 
 ## Tính năng
 
@@ -136,7 +136,7 @@ Rồi `DATABASE_URL="postgresql://..."` trong `.env`, chạy `npx prisma migrate
 
 ## Upstream
 
-Mặc định request `/api/v1/chat/completions` được forward thật tới Beeknoee gateway (cấu hình qua `BEEKNOEE_BASE_URL` và `BEEKNOEE_API_KEY` trong `.env`). Muốn dùng provider khác (OpenAI/Anthropic/Google trực tiếp), sửa logic trong `src/lib/upstream.ts` hoặc `src/app/api/v1/chat/completions/route.ts`.
+Mặc định request `/api/v1/chat/completions` được forward thật tới Quang Thưởng AI gateway (cấu hình qua `BEEKNOEE_BASE_URL` và `BEEKNOEE_API_KEY` trong `.env` — tên env vars giữ nguyên để backward-compat). Muốn dùng provider khác (OpenAI/Anthropic/Google trực tiếp), sửa logic trong `src/lib/upstream.ts` hoặc `src/app/api/v1/chat/completions/route.ts`.
 
 ## Lưu ý bảo mật cho production
 

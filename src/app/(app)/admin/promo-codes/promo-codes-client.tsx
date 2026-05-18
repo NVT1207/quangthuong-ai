@@ -394,7 +394,7 @@ function EditModal({
             <input
               value={editing.description}
               onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-              placeholder="Khuyến mãi mở khóa API Beeknoee, lần đầu nạp 3M+"
+              placeholder="Khuyến mãi mở khóa API Quang Thưởng AI, lần đầu nạp 3M+"
               className="input"
               maxLength={500}
             />

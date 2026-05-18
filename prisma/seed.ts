@@ -400,9 +400,9 @@ const CHANGELOG = [
   },
   {
     version: "v0.2.0",
-    title: "Forward upstream Beeknoee — bỏ mock response",
+    title: "Forward upstream Quang Thưởng AI — bỏ mock response",
     kind: "feature",
-    content: "- Mọi request qua `/api/v1/chat/completions` được forward thật tới Beeknoee gateway\n- Hỗ trợ pass-through các option chuẩn OpenAI: temperature, top_p, max_tokens, stop, response_format, tools, tool_choice",
+    content: "- Mọi request qua `/api/v1/chat/completions` được forward thật tới Quang Thưởng AI gateway\n- Hỗ trợ pass-through các option chuẩn OpenAI: temperature, top_p, max_tokens, stop, response_format, tools, tool_choice",
   },
   {
     version: "v0.1.0",
@@ -417,10 +417,10 @@ async function main() {
   const demoPass = await bcrypt.hash("demo123", 10);
 
   await prisma.user.upsert({
-    where: { email: "admin@beeknoee.local" },
+    where: { email: "admin@quangthuong.local" },
     update: {},
     create: {
-      email: "admin@beeknoee.local",
+      email: "admin@quangthuong.local",
       name: "Quản trị viên",
       passwordHash: adminPass,
       role: "ADMIN",
@@ -429,10 +429,10 @@ async function main() {
   });
 
   await prisma.user.upsert({
-    where: { email: "demo@beeknoee.local" },
+    where: { email: "demo@quangthuong.local" },
     update: {},
     create: {
-      email: "demo@beeknoee.local",
+      email: "demo@quangthuong.local",
       name: "Người dùng demo",
       passwordHash: demoPass,
       role: "USER",
@@ -474,7 +474,7 @@ async function main() {
   }
 
   console.log(`Seed xong: ${CATALOG.length} model, ${POSTS.length} bài blog, ${CHANGELOG.length} changelog.`);
-  console.log("admin@beeknoee.local / admin123 — demo@beeknoee.local / demo123");
+  console.log("admin@quangthuong.local / admin123 — demo@quangthuong.local / demo123");
 }
 
 main().finally(() => prisma.$disconnect());

@@ -1,6 +1,6 @@
 // Anthropic <-> OpenAI translation bridge.
-// Dùng khi /api/v1/messages của Beeknoee (Anthropic-style) forward tới upstream OpenAI-compat
-// (ChiaSeGPU, Beeknoee platform, OpenRouter, LiteLLM, vv) — cần dịch request/response qua lại.
+// Dùng khi /api/v1/messages của Quang Thưởng AI (Anthropic-style) forward tới upstream OpenAI-compat
+// (ChiaSeGPU, OpenRouter, LiteLLM, vv) — cần dịch request/response qua lại.
 
 type AnthropicContentBlock =
   | { type: "text"; text: string }

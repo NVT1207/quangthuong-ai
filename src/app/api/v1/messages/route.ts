@@ -1,5 +1,5 @@
 // Anthropic Messages API — chuẩn /v1/messages cho Claude Code CLI.
-// Pass-through tới upstream Beeknoee (gateway gốc hỗ trợ Anthropic format),
+// Pass-through tới upstream Quang Thưởng AI (gateway gốc hỗ trợ Anthropic format),
 // auth bằng sk-bee-... của user và charge theo token usage trong response.
 
 import { NextResponse } from "next/server";
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
     });
     return err(
       402,
-      `Số dư tài khoản bằng 0. Vui lòng nạp tiền tại https://beeknoee.com/topup trước khi sử dụng Claude Code.`,
+      `Số dư tài khoản bằng 0. Vui lòng nạp tiền tại https://quangthuong-ai.vercel.app/topup trước khi sử dụng Claude Code.`,
       "insufficient_balance",
     );
   }
@@ -175,13 +175,13 @@ export async function POST(req: Request) {
     });
     return err(
       402,
-      `Số dư không đủ (hiện có ${formatVND(key.user.balance)}, cần tối thiểu ${formatVND(minCost)} cho prompt này). Nạp thêm tại https://beeknoee.com/topup`,
+      `Số dư không đủ (hiện có ${formatVND(key.user.balance)}, cần tối thiểu ${formatVND(minCost)} cho prompt này). Nạp thêm tại https://quangthuong-ai.vercel.app/topup`,
       "insufficient_balance",
     );
   }
 
   // Forward to upstream /messages via multi-provider routing + auto failover.
-  // Quan trọng: nếu upstream KHÔNG phải Anthropic native (vd ChiaSeGPU, Beeknoee platform, OpenRouter)
+  // Quan trọng: nếu upstream KHÔNG phải Anthropic native (vd ChiaSeGPU, OpenRouter, gateway OpenAI-compat)
   // thì phải dịch request Anthropic → OpenAI shape và dịch response ngược lại — không thì
   // client (Cline / Claude SDK) sẽ nhận response shape sai và báo "empty/malformed (HTTP 200)".
   let upstream: Response;
@@ -402,7 +402,7 @@ export async function POST(req: Request) {
     });
     return err(
       402,
-      `Số dư không đủ sau khi tính phí (cần ${formatVND(cost)}, hiện có ${formatVND(balance)}). Nạp thêm tại https://beeknoee.com/topup`,
+      `Số dư không đủ sau khi tính phí (cần ${formatVND(cost)}, hiện có ${formatVND(balance)}). Nạp thêm tại https://quangthuong-ai.vercel.app/topup`,
       "insufficient_balance",
     );
   }
