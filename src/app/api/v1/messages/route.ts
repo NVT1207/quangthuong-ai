@@ -122,6 +122,21 @@ export async function POST(req: Request) {
   if (key.user.status === "BANNED") return err(403, "Account banned", "permission_error");
   if (!model || !model.active) return err(404, `Model '${modelSlug}' not found`, "not_found_error");
 
+  // Chỉ cho phép TEXT / EMBEDDING gọi /messages
+  if (model.modality && model.modality !== "TEXT" && model.modality !== "EMBEDDING") {
+    const endpointHint = ({
+      IMAGE: "/v1/images/generations",
+      VIDEO: "/v1/videos/generations",
+      AUDIO_TTS: "/v1/audio/speech",
+      AUDIO_STT: "/v1/audio/transcriptions",
+    } as Record<string, string>)[model.modality];
+    return err(
+      400,
+      `Model '${modelSlug}' là ${model.modality} — dùng endpoint ${endpointHint ?? "đúng modality"} thay vì /v1/messages.`,
+      "invalid_request_error"
+    );
+  }
+
   // Key phải subscribe model này (mỗi key tự chọn model trong /api-keys → Xem chi tiết → Models)
   const sub = await prisma.apiKeyModel.findUnique({
     where: { apiKeyId_modelId: { apiKeyId: key.id, modelId: model.id } },

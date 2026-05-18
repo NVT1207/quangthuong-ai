@@ -303,12 +303,40 @@ export async function markKeyError(keyId: string): Promise<void> {
     .catch(() => undefined);
 }
 
+export type EndpointKind =
+  | "chat"
+  | "messages"
+  | "images"
+  | "videos"
+  | "audio_speech"
+  | "audio_transcriptions";
+
 // Endpoint URL theo provider type
 export function buildEndpointUrl(
   type: ProviderType,
   baseUrl: string,
-  kind: "chat" | "messages"
+  kind: EndpointKind
 ): string {
+  // Image / Video / Audio endpoint — chỉ OPENAI / OPENAI_COMPATIBLE chạy được.
+  // GEMINI/ANTHROPIC/OLLAMA chưa có endpoint chuẩn → throw để admin tạo provider OPENAI_COMPATIBLE
+  // trỏ về OpenAI gateway / OpenRouter / Replicate.
+  if (kind === "images") {
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/images/generations`;
+    throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ image generation. Tạo provider OPENAI_COMPATIBLE.`);
+  }
+  if (kind === "videos") {
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/videos/generations`;
+    throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ video generation. Tạo provider OPENAI_COMPATIBLE.`);
+  }
+  if (kind === "audio_speech") {
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/audio/speech`;
+    throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ TTS. Tạo provider OPENAI_COMPATIBLE.`);
+  }
+  if (kind === "audio_transcriptions") {
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/audio/transcriptions`;
+    throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ STT. Tạo provider OPENAI_COMPATIBLE.`);
+  }
+
   switch (type) {
     case "ANTHROPIC":
       return `${baseUrl}/messages`;
@@ -356,7 +384,7 @@ export type CallWithFailoverResult = {
 // buildRequest sẽ được gọi mỗi attempt với upstream mới resolve.
 export async function callWithFailover(
   modelSlug: string,
-  _kind: "chat" | "messages",
+  _kind: EndpointKind,
   buildRequest: (u: ResolvedUpstream) => Promise<Response>,
   maxAttempts = 3
 ): Promise<CallWithFailoverResult> {
