@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react";
 import {
   X, Link2, Combine, Rocket, Settings2, Zap, History, Sparkles, Bot, Terminal as TerminalIcon,
-  Plus, BarChart3,
+  Plus, BarChart3, Plug,
 } from "lucide-react";
 import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 import { ClaudeSetupCard, OpenclawSetupCard, type KeyItem, type ModelOpt } from "./cli-panels";
 import { ModelsTab } from "./models-tab";
+import { ThirdPartySetupCard } from "./third-party-setup";
 
 type Detail = {
   key: { id: string; name: string; prefix: string; suffix: string; enabled: boolean; createdAt: string; lastUsedAt: string | null };
@@ -25,7 +26,7 @@ type Props = {
   revealed?: Record<string, string>;
 };
 
-type TabKey = "models" | "stats" | "history" | "claude" | "openclaw";
+type TabKey = "models" | "stats" | "history" | "claude" | "openclaw" | "thirdparty";
 
 export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revealed }: Props) {
   const [tab, setTab] = useState<TabKey>("models");
@@ -112,6 +113,9 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
             <TabPill active={tab === "openclaw"} onClick={() => setTab("openclaw")} icon={<Bot size={13} className="text-rose-300" />}>
               OpenClaw
             </TabPill>
+            <TabPill active={tab === "thirdparty"} onClick={() => setTab("thirdparty")} icon={<Plug size={13} className="text-sky-300" />}>
+              Kết nối khác
+            </TabPill>
           </div>
         </div>
 
@@ -131,6 +135,10 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
 
           {tab === "openclaw" && (
             <OpenclawSetupCard keys={[keyItem]} models={models} baseUrl={baseUrl} revealed={revealed} />
+          )}
+
+          {tab === "thirdparty" && (
+            <ThirdPartySetupCard keyItem={keyItem} models={models} baseUrl={baseUrl} revealed={revealed} />
           )}
 
           {(tab === "stats" || tab === "history") && (loading || !data) && (

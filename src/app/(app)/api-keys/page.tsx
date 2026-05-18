@@ -11,10 +11,19 @@ export default async function ApiKeysPage() {
   const session = await getServerSession(authOptions);
   const userId = session!.user.id;
 
+  // Public base URL hiển thị cho user copy vào tool 3rd-party.
+  // Ưu tiên env override (đặt PUBLIC_BASE_URL=https://quangthuong-ai.vercel.app trên Vercel
+  // để mọi preview/prod đều show URL canonical), fallback auto-detect từ host header.
   const h = headers();
-  const host = h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const baseUrl = `${proto}://${host}`;
+  const envBase = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_PUBLIC_BASE_URL;
+  let baseUrl: string;
+  if (envBase) {
+    baseUrl = envBase.replace(/\/+$/, "");
+  } else {
+    const host = h.get("host") ?? "localhost:3000";
+    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+    baseUrl = `${proto}://${host}`;
+  }
 
   const [keys, models] = await Promise.all([
     prisma.apiKey.findMany({
