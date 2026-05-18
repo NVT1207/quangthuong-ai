@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptKey, getCipherStatus } from "@/lib/key-cipher";
+import { Prisma } from "@prisma/client";
+import { MODALITIES, validatePricingData } from "@/lib/pricing";
 
 const ALLOWED_API_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
 const API_TYPES_NEED_BASEURL = new Set(["OLLAMA", "OPENAI_COMPATIBLE"]);
@@ -23,7 +25,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (b.displayName) data.displayName = String(b.displayName);
   if (b.provider) data.provider = String(b.provider);
   if (b.slug) data.slug = String(b.slug).trim();
-  if (b.category && ["text", "embedding", "image", "video", "tts"].includes(b.category)) data.category = b.category;
+  if (b.category && ["text", "embedding", "image", "video", "tts", "stt"].includes(b.category)) data.category = b.category;
   if (b.priceUnit !== undefined) data.priceUnit = String(b.priceUnit || "1M tokens");
   if (b.inputPrice !== undefined) data.inputPrice = Number(b.inputPrice);
   if (b.outputPrice !== undefined) data.outputPrice = Number(b.outputPrice);
@@ -37,6 +39,33 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (b.latencyMs !== undefined) data.latencyMs = Number(b.latencyMs) || 0;
   if (b.uptimeStatus !== undefined && ["good", "warn", "down"].includes(b.uptimeStatus)) data.uptimeStatus = b.uptimeStatus;
   if (b.upstreamSlug !== undefined) data.upstreamSlug = b.upstreamSlug ? String(b.upstreamSlug).trim() : null;
+
+  // === Modality + pricingData ===
+  // 3 case:
+  //  - chỉ update modality → revalidate pricingData hiện tại trong DB nếu cần (nhưng client luôn gửi kèm), nên đơn giản: yêu cầu gửi kèm khi đổi modality.
+  //  - chỉ update pricingData → cần biết modality để validate → load DB nếu client không gửi.
+  //  - update cả 2 → validate trực tiếp.
+  let modalityForValidate: string | null = null;
+  if (b.modality !== undefined) {
+    if (!MODALITIES.includes(b.modality)) {
+      return NextResponse.json({ error: "modality không hợp lệ" }, { status: 400 });
+    }
+    modalityForValidate = b.modality;
+    data.modality = b.modality;
+  }
+  if (b.pricingData !== undefined) {
+    let mod = modalityForValidate;
+    if (!mod) {
+      const current = await prisma.model.findUnique({ where: { id: params.id }, select: { modality: true } });
+      mod = current?.modality ?? "TEXT";
+    }
+    const validated = validatePricingData(mod, b.pricingData);
+    if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
+    data.pricingData = validated.data === null ? Prisma.JsonNull : validated.data;
+  } else if (b.modality !== undefined && (b.modality === "TEXT" || b.modality === "EMBEDDING")) {
+    // Khi chuyển về TEXT/EMBEDDING mà client không gửi pricingData → tự reset null.
+    data.pricingData = Prisma.JsonNull;
+  }
 
   // === API config ===
   if (b.apiType !== undefined) {

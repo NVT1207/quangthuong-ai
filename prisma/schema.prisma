@@ -115,6 +115,16 @@ model Model {
   // === Deprecated: provider relation (giữ nullable cho backward-compat) ===
   providerId    String?
   providerRef   Provider? @relation(fields: [providerId], references: [id])
+  // === Multi-modality pricing ===
+  // modality: TEXT | IMAGE | VIDEO | AUDIO_TTS | AUDIO_STT | EMBEDDING
+  // pricingData JSON shape phụ thuộc modality:
+  //   - TEXT/EMBEDDING: null (dùng inputPrice/outputPrice cũ)
+  //   - IMAGE: { matrix: [{ size, quality, price }] } (VND/ảnh)
+  //   - VIDEO: { matrix: [{ resolution, duration, price }] } (VND/video)
+  //   - AUDIO_TTS: { charRate, voices: [{ id, name, gender?, preview? }] } (VND/1M chars)
+  //   - AUDIO_STT: { minuteRate, languages: string[] } (VND/phút)
+  modality      String    @default("TEXT")
+  pricingData   Json?
   // Reverse relation cho ApiKeyModel
   apiKeySubs    ApiKeyModel[]
 
@@ -217,6 +227,9 @@ model UsageLog {
   cost         Float
   status       Int
   ip           String?
+  // === Multi-modality snapshot ===
+  modality     String?  // TEXT | IMAGE | VIDEO | AUDIO_TTS | AUDIO_STT | EMBEDDING — null = TEXT legacy
+  unitsMeta    Json?    // { size, quality, count } | { resolution, duration } | { chars, voice } | { seconds, language }
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   apiKey       ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)

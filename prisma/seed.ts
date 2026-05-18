@@ -6,11 +6,28 @@ const prisma = new PrismaClient();
 const USD_TO_VND = 25000;
 const usd = (n: number) => Math.round(n * USD_TO_VND);
 
+// Inline để seed độc lập, không depend src/.
+const OPENAI_TTS_VOICES = [
+  { id: "alloy", name: "Alloy" },
+  { id: "echo", name: "Echo" },
+  { id: "fable", name: "Fable" },
+  { id: "onyx", name: "Onyx" },
+  { id: "nova", name: "Nova" },
+  { id: "shimmer", name: "Shimmer" },
+];
+const WHISPER_LANGS = [
+  "af","ar","hy","az","be","bs","bg","ca","zh","hr","cs","da","nl","en","et","fi","fr","gl",
+  "de","el","he","hi","hu","is","id","it","ja","kn","kk","ko","lv","lt","mk","ms","mr","mi",
+  "ne","no","fa","pl","pt","ro","ru","sr","sk","sl","es","sw","sv","tl","ta","th","tr","uk",
+  "ur","vi","cy","yi","yo","am","my","sn","gu","sd","su","tt","tg","te","tk","uz","ba",
+  "br","ka","si","sa","sm","ha","ht","la","lb","jw","mg","ml","mn","oc","ps","lo","mt","so",
+];
+
 type Seed = {
   slug: string;
   displayName: string;
   provider: string;
-  category: "text" | "embedding" | "image" | "video" | "tts";
+  category: "text" | "embedding" | "image" | "video" | "tts" | "stt";
   priceUnit?: string;
   inputUSD: number;
   outputUSD: number;
@@ -23,6 +40,72 @@ type Seed = {
   basicDiscount?: number;
   advDiscount?: number;
 };
+
+// Map category → modality + pricingData mặc định (dùng inputUSD làm anchor).
+function deriveModality(m: Seed): { modality: string; pricingData: any | null } {
+  switch (m.category) {
+    case "text": return { modality: "TEXT", pricingData: null };
+    case "embedding": return { modality: "EMBEDDING", pricingData: null };
+    case "image":
+      return {
+        modality: "IMAGE",
+        pricingData: {
+          // Default matrix: 4 sizes × 3 qualities = 12 row, anchor giá ở 1024x1024 / auto.
+          matrix: [
+            { size: "1024x1024", quality: "low", price: usd(m.inputUSD * 0.5) },
+            { size: "1024x1024", quality: "medium", price: usd(m.inputUSD) },
+            { size: "1024x1024", quality: "high", price: usd(m.inputUSD * 2) },
+            { size: "1024x1024", quality: "auto", price: usd(m.inputUSD) },
+            { size: "1024x1536", quality: "auto", price: usd(m.inputUSD * 1.3) },
+            { size: "1536x1024", quality: "auto", price: usd(m.inputUSD * 1.3) },
+            { size: "1024x1792", quality: "auto", price: usd(m.inputUSD * 1.5) },
+            { size: "1792x1024", quality: "auto", price: usd(m.inputUSD * 1.5) },
+            { size: "768x1024", quality: "auto", price: usd(m.inputUSD * 0.8) },
+            { size: "1024x768", quality: "auto", price: usd(m.inputUSD * 0.8) },
+          ],
+        },
+      };
+    case "video":
+      return {
+        modality: "VIDEO",
+        pricingData: {
+          // Matrix 4 resolution × 4 duration đại diện, giá scale theo resolution + duration.
+          matrix: [
+            { resolution: "480p", duration: "6s",  price: usd(m.inputUSD * 6 * 0.5) },
+            { resolution: "480p", duration: "8s",  price: usd(m.inputUSD * 8 * 0.5) },
+            { resolution: "720p", duration: "6s",  price: usd(m.inputUSD * 6) },
+            { resolution: "720p", duration: "8s",  price: usd(m.inputUSD * 8) },
+            { resolution: "720p", duration: "10s", price: usd(m.inputUSD * 10) },
+            { resolution: "1080p", duration: "6s",  price: usd(m.inputUSD * 6 * 1.8) },
+            { resolution: "1080p", duration: "8s",  price: usd(m.inputUSD * 8 * 1.8) },
+            { resolution: "1080p", duration: "10s", price: usd(m.inputUSD * 10 * 1.8) },
+            { resolution: "4k",    duration: "6s",  price: usd(m.inputUSD * 6 * 3.5) },
+            { resolution: "4k",    duration: "8s",  price: usd(m.inputUSD * 8 * 3.5) },
+          ],
+        },
+      };
+    case "tts":
+      return {
+        modality: "AUDIO_TTS",
+        pricingData: {
+          charRate: usd(m.inputUSD), // m.inputUSD đã là USD/1M chars cho TTS
+          voices: m.provider === "openai" ? OPENAI_TTS_VOICES : [
+            { id: "default", name: "Default" },
+          ],
+        },
+      };
+    case "stt":
+      return {
+        modality: "AUDIO_STT",
+        pricingData: {
+          minuteRate: usd(m.inputUSD),
+          languages: [...WHISPER_LANGS],
+        },
+      };
+    default:
+      return { modality: "TEXT", pricingData: null };
+  }
+}
 
 const CATALOG: Seed[] = [
   // ============ TEXT / CHAT ============
@@ -347,6 +430,19 @@ const CATALOG: Seed[] = [
     description: "Google Chirp 3 HD — TTS đa ngôn ngữ thế hệ mới.",
     speedTps: 0, latencyMs: 1000, uptimeStatus: "warn",
     freeDiscount: 30, basicDiscount: 40, advDiscount: 50 },
+
+  // ============ STT ============
+  { slug: "whisper-1", displayName: "OpenAI Whisper", provider: "openai", category: "stt", priceUnit: "1 phút audio",
+    inputUSD: 0.006, outputUSD: 0, contextLength: 0,
+    description: "Whisper-1 của OpenAI — STT 99+ ngôn ngữ, độ chính xác cao.",
+    speedTps: 0, latencyMs: 1500, uptimeStatus: "good",
+    freeDiscount: 40, basicDiscount: 50, advDiscount: 60 },
+
+  { slug: "gpt-4o-transcribe", displayName: "GPT-4o Transcribe", provider: "openai", category: "stt", priceUnit: "1 phút audio",
+    inputUSD: 0.006, outputUSD: 0, contextLength: 0,
+    description: "GPT-4o phiên bản STT — accent VN tốt, transcribe realtime.",
+    speedTps: 0, latencyMs: 1200, uptimeStatus: "good",
+    freeDiscount: 35, basicDiscount: 45, advDiscount: 55 },
 ];
 
 const POSTS = [
@@ -442,6 +538,7 @@ async function main() {
 
   await prisma.model.deleteMany({});
   for (const m of CATALOG) {
+    const { modality, pricingData } = deriveModality(m);
     await prisma.model.create({
       data: {
         slug: m.slug,
@@ -459,6 +556,8 @@ async function main() {
         freeDiscount: m.freeDiscount ?? 0,
         basicDiscount: m.basicDiscount ?? 0,
         advDiscount: m.advDiscount ?? 0,
+        modality,
+        ...(pricingData !== null ? { pricingData } : {}),
       },
     });
   }

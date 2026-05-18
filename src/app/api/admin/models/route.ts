@@ -3,10 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptKey, getCipherStatus } from "@/lib/key-cipher";
+import { MODALITIES, validatePricingData } from "@/lib/pricing";
 
 const ALLOWED_PROVIDERS = ["openai", "anthropic", "google", "deepseek", "grok", "meta", "mistral", "other"];
 const ALLOWED_UPTIME = ["good", "warn", "down"];
-const ALLOWED_CATEGORIES = ["text", "embedding", "image", "video", "tts"];
+const ALLOWED_CATEGORIES = ["text", "embedding", "image", "video", "tts", "stt"];
 const ALLOWED_API_TYPES = ["OPENAI", "ANTHROPIC", "GEMINI", "OLLAMA", "OPENAI_COMPATIBLE"];
 
 const API_TYPES_NEED_BASEURL = new Set(["OLLAMA", "OPENAI_COMPATIBLE"]);
@@ -39,6 +40,12 @@ export async function POST(req: Request) {
   const uptime = ALLOWED_UPTIME.includes(b.uptimeStatus) ? b.uptimeStatus : "good";
   const category = ALLOWED_CATEGORIES.includes(b.category) ? b.category : "text";
   const priceUnit = typeof b.priceUnit === "string" && b.priceUnit.trim() ? b.priceUnit.trim() : "1M tokens";
+
+  // === Modality + pricingData ===
+  const modality = MODALITIES.includes(b.modality) ? b.modality : "TEXT";
+  const validated = validatePricingData(modality, b.pricingData ?? null);
+  if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
+  const pricingData = validated.data;
 
   // === API config ===
   const apiType = ALLOWED_API_TYPES.includes(b.apiType) ? b.apiType : "OPENAI_COMPATIBLE";
@@ -85,6 +92,8 @@ export async function POST(req: Request) {
         apiKeyEnc,
         apiKeyPrefix,
         upstreamSlug: b.upstreamSlug ? String(b.upstreamSlug).trim() : null,
+        modality,
+        ...(pricingData !== null ? { pricingData } : {}),
       },
     });
     return NextResponse.json(m);
