@@ -15,7 +15,13 @@ import {
   isUpstreamConfigured,
   UpstreamError,
   describeAdminKeyError,
+  type ResolvedUpstream,
 } from "@/lib/provider-routing";
+import {
+  anthropicToOpenAIRequest,
+  openaiToAnthropicResponse,
+  createAnthropicStreamTranslator,
+} from "@/lib/anthropic-bridge";
 import { formatVND } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -174,23 +180,38 @@ export async function POST(req: Request) {
     );
   }
 
-  // Forward to upstream /messages via multi-provider routing + auto failover
+  // Forward to upstream /messages via multi-provider routing + auto failover.
+  // Quan trọng: nếu upstream KHÔNG phải Anthropic native (vd ChiaSeGPU, Beeknoee platform, OpenRouter)
+  // thì phải dịch request Anthropic → OpenAI shape và dịch response ngược lại — không thì
+  // client (Cline / Claude SDK) sẽ nhận response shape sai và báo "empty/malformed (HTTP 200)".
   let upstream: Response;
+  let used: ResolvedUpstream | null = null;
   try {
     const result = await callWithFailover(modelSlug, "messages", async (u) => {
+      const isAnthropicNative = u.providerType === "ANTHROPIC";
       const url = buildEndpointUrl(u.providerType, u.baseUrl, "messages");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...authHeaders(u.providerType, u.apiKey),
+      };
+      let payload: any;
+      if (isAnthropicNative) {
+        headers["anthropic-version"] = req.headers.get("anthropic-version") || "2023-06-01";
+        const beta = req.headers.get("anthropic-beta");
+        if (beta) headers["anthropic-beta"] = beta;
+        payload = { ...body, model: u.upstreamModelSlug };
+      } else {
+        // Translate Anthropic → OpenAI cho upstream OpenAI-compat
+        payload = anthropicToOpenAIRequest(body, u.upstreamModelSlug);
+      }
       return fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...authHeaders(u.providerType, u.apiKey),
-          "anthropic-version": req.headers.get("anthropic-version") || "2023-06-01",
-          "anthropic-beta": req.headers.get("anthropic-beta") || "",
-        },
-        body: JSON.stringify({ ...body, model: u.upstreamModelSlug }),
+        headers,
+        body: JSON.stringify(payload),
       });
     });
     upstream = result.res;
+    used = result.used;
   } catch (e: any) {
     const status = e instanceof UpstreamError ? e.status : 502;
     const msg = e instanceof UpstreamError && e.adminSide
@@ -214,6 +235,8 @@ export async function POST(req: Request) {
     );
   }
 
+  const isAnthropicNative = used?.providerType === "ANTHROPIC";
+
   if (stream && upstream.body) {
     const decoder = new TextDecoder();
     let inputTokens = estInputTokens;
@@ -221,11 +244,16 @@ export async function POST(req: Request) {
     let collectedText = "";
     let buffer = "";
 
+    // Translator chỉ tạo khi upstream không phải Anthropic native — dùng để dịch
+    // OpenAI SSE chunks → Anthropic SSE events.
+    const translator = isAnthropicNative ? null : createAnthropicStreamTranslator(modelSlug, estInputTokens);
+
     const encoder = new TextEncoder();
     const out = new ReadableStream({
       async start(controller) {
         const reader = upstream.body!.getReader();
-        const forwardLine = async (line: string) => {
+
+        const forwardLineAnthropic = async (line: string) => {
           if (containsSensitiveUpstreamError(line)) {
             controller.enqueue(encoder.encode(safeAnthropicStream(modelSlug, inputTokens)));
             controller.close();
@@ -254,6 +282,35 @@ export async function POST(req: Request) {
           } catch { /* ignore */ }
           return true;
         };
+
+        const forwardLineOpenAI = async (line: string) => {
+          if (containsSensitiveUpstreamError(line)) {
+            controller.enqueue(encoder.encode(safeAnthropicStream(modelSlug, inputTokens)));
+            controller.close();
+            await reader.cancel().catch(() => undefined);
+            await prisma.usageLog.create({ data: { userId: key.userId, apiKeyId: key.id, modelSlug, inputTokens, outputTokens: 0, cost: 0, status: SAFE_UPSTREAM_STATUS, ip } });
+            return false;
+          }
+          // Dịch line OpenAI → events Anthropic và forward
+          const translated = translator!.feedLine(line);
+          if (translated) controller.enqueue(encoder.encode(translated));
+          // Cộng dồn text từ delta để fallback tính token nếu upstream không gửi usage
+          const l = line.trim();
+          if (l.startsWith("data:")) {
+            const payload = l.slice(5).trim();
+            if (payload && payload !== "[DONE]") {
+              try {
+                const j = JSON.parse(payload);
+                const txt = j?.choices?.[0]?.delta?.content;
+                if (typeof txt === "string") collectedText += txt;
+              } catch { /* ignore */ }
+            }
+          }
+          return true;
+        };
+
+        const forwardLine = isAnthropicNative ? forwardLineAnthropic : forwardLineOpenAI;
+
         try {
           while (true) {
             const { value, done } = await reader.read();
@@ -271,6 +328,14 @@ export async function POST(req: Request) {
         } catch (e: any) {
           controller.error(e);
           return;
+        }
+
+        // Flush final translation events (message_delta + message_stop) nếu là OpenAI mode
+        if (translator) {
+          const finalEvents = translator.finish();
+          if (finalEvents) controller.enqueue(encoder.encode(finalEvents));
+          inputTokens = translator.getInputTokens() || inputTokens;
+          outputTokens = translator.getOutputTokens() || outputTokens;
         }
         controller.close();
 
@@ -316,8 +381,17 @@ export async function POST(req: Request) {
     });
     return err(502, "Upstream trả về không hợp lệ", "api_error");
   }
-  const inputTokens = json?.usage?.input_tokens ?? estInputTokens;
-  const outputTokens = json?.usage?.output_tokens ?? 0;
+
+  // Nếu upstream là OpenAI-compat → response shape là {choices,...} → cần dịch sang Anthropic.
+  // Nếu là Anthropic native → response đã có shape {content:[...]} → pass-through.
+  const responseJson = isAnthropicNative ? json : openaiToAnthropicResponse(json, modelSlug);
+
+  const inputTokens = isAnthropicNative
+    ? (json?.usage?.input_tokens ?? estInputTokens)
+    : (json?.usage?.prompt_tokens ?? estInputTokens);
+  const outputTokens = isAnthropicNative
+    ? (json?.usage?.output_tokens ?? 0)
+    : (json?.usage?.completion_tokens ?? 0);
   const cost = computeCost(inputTokens, outputTokens, model.inputPrice, model.outputPrice, discount);
 
   const fresh = await prisma.user.findUnique({ where: { id: key.userId } });
@@ -340,7 +414,7 @@ export async function POST(req: Request) {
     prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } }),
   ]);
 
-  return NextResponse.json(json);
+  return NextResponse.json(responseJson);
 }
 
 
