@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   let upstreamRes: Response;
   try {
     const { res } = await callWithFailover(model.slug, "images", async (u) => {
-      const url = buildEndpointUrl(u.providerType, u.baseUrl, "images");
+      const url = buildEndpointUrl(u.providerType, u.imagesBaseUrl ?? u.baseUrl, "images");
       return fetch(url, {
         method: "POST",
         headers: { ...authHeaders(u.providerType, u.apiKey), "Content-Type": "application/json" },

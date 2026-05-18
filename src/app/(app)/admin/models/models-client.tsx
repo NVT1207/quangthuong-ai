@@ -25,6 +25,7 @@ type M = {
   speedTps: number; latencyMs: number; uptimeStatus: string;
   apiType: string;
   apiBaseUrl: string | null;
+  apiBaseUrlImages: string | null;
   apiKey: string; // plaintext from server
   apiKeyPrefix: string | null;
   upstreamSlug: string | null;
@@ -65,7 +66,7 @@ const blank: Editing = {
   description: "", active: true,
   freeDiscount: 50, basicDiscount: 60, advDiscount: 70,
   speedTps: 0, latencyMs: 0, uptimeStatus: "good",
-  apiType: "OPENAI", apiBaseUrl: "", apiKey: "", upstreamSlug: "",
+  apiType: "OPENAI", apiBaseUrl: "", apiBaseUrlImages: "", apiKey: "", upstreamSlug: "",
   modality: "TEXT", pricingData: null,
 };
 
@@ -123,6 +124,7 @@ export function ModelsAdminClient({ initial }: { initial: M[] }) {
       ...editing,
       slug: finalSlug,
       apiBaseUrl: editing.apiBaseUrl?.trim() || null,
+      apiBaseUrlImages: editing.apiBaseUrlImages?.trim() || null,
     };
     // Chỉ gửi apiKey nếu admin đã thay đổi (hoặc tạo mới)
     if (!editing.apiKeyChanged) delete payload.apiKey;
@@ -340,6 +342,24 @@ export function ModelsAdminClient({ initial }: { initial: M[] }) {
                   }
                 />
               </div>
+
+              {editing.modality === "IMAGE" && (
+                <div>
+                  <label className="label">
+                    Base URL — Image
+                    <span className="text-ink-200/40 text-[10px] ml-2">(để trống = dùng Base URL chính)</span>
+                  </label>
+                  <input
+                    value={editing.apiBaseUrlImages ?? ""}
+                    onChange={(e) => setEditing({ ...editing, apiBaseUrlImages: e.target.value })}
+                    className="input font-mono text-xs"
+                    placeholder="https://llm-2.chiasegpu.vn/v1"
+                  />
+                  <p className="text-[10px] text-ink-200/50 mt-1">
+                    ChiaSeGPU tách host cho image endpoint. Set <code>llm-2.chiasegpu.vn/v1</code> nếu gateway của em yêu cầu host riêng cho /images/generations.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="label flex items-center justify-between">

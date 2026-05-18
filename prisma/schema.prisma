@@ -104,6 +104,7 @@ model Model {
   // === Upstream config (1 model = 1 key) ===
   apiType       String    @default("OPENAI_COMPATIBLE") // OPENAI | ANTHROPIC | GEMINI | OLLAMA | OPENAI_COMPATIBLE
   apiBaseUrl    String? // null → endpoint mặc định theo apiType
+  apiBaseUrlImages String? // override base URL cho image endpoint (vd ChiaSeGPU tách `llm-2.chiasegpu.vn/v1` cho image)
   apiKeyEnc     String? // AES-256-GCM ciphertext của API key; null → fallback env
   apiKeyPrefix  String? // 8 ký tự đầu để show UI
   upstreamSlug  String? // tên model thật ở upstream; null → dùng `slug`

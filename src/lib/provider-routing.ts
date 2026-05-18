@@ -51,6 +51,7 @@ export type ResolvedUpstream = {
   providerId?: string;
   keyId?: string;
   baseUrl: string; // không trailing slash
+  imagesBaseUrl?: string; // override base URL cho image endpoint (vd ChiaSeGPU tách `llm-2.chiasegpu.vn/v1`)
   apiKey: string; // plaintext
   providerType: ProviderType;
   upstreamModelSlug: string;
@@ -206,6 +207,7 @@ export async function resolveUpstream(
     return {
       source: "PROVIDER",
       baseUrl,
+      imagesBaseUrl: model.apiBaseUrlImages ? stripTrailing(model.apiBaseUrlImages) : undefined,
       apiKey: plaintext,
       providerType: type,
       upstreamModelSlug: model.upstreamSlug ?? model.slug,
@@ -325,7 +327,7 @@ export function buildEndpointUrl(
     throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ image generation. Tạo provider OPENAI_COMPATIBLE.`);
   }
   if (kind === "videos") {
-    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/videos/generations`;
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/videos`;
     throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ video generation. Tạo provider OPENAI_COMPATIBLE.`);
   }
   if (kind === "audio_speech") {

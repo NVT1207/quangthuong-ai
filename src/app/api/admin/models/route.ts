@@ -56,6 +56,10 @@ export async function POST(req: Request) {
   if (API_TYPES_NEED_BASEURL.has(apiType) && !apiBaseUrl) {
     return NextResponse.json({ error: `Loại API ${apiType} cần Base URL` }, { status: 400 });
   }
+  let apiBaseUrlImages: string | null = null;
+  if (typeof b.apiBaseUrlImages === "string" && b.apiBaseUrlImages.trim()) {
+    apiBaseUrlImages = b.apiBaseUrlImages.trim().replace(/\/+$/, "");
+  }
 
   let apiKeyEnc: string | null = null;
   let apiKeyPrefix: string | null = null;
@@ -89,6 +93,7 @@ export async function POST(req: Request) {
         uptimeStatus: uptime,
         apiType,
         apiBaseUrl,
+        apiBaseUrlImages,
         apiKeyEnc,
         apiKeyPrefix,
         upstreamSlug: b.upstreamSlug ? String(b.upstreamSlug).trim() : null,

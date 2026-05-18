@@ -76,6 +76,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (b.apiBaseUrl === null || b.apiBaseUrl === "") data.apiBaseUrl = null;
     else data.apiBaseUrl = String(b.apiBaseUrl).trim().replace(/\/+$/, "");
   }
+  if (b.apiBaseUrlImages !== undefined) {
+    if (b.apiBaseUrlImages === null || b.apiBaseUrlImages === "") data.apiBaseUrlImages = null;
+    else data.apiBaseUrlImages = String(b.apiBaseUrlImages).trim().replace(/\/+$/, "");
+  }
   // Chỉ encrypt + lưu key mới nếu admin nhập (chuỗi khác rỗng). Nếu rỗng/undefined → giữ key cũ.
   if (typeof b.apiKey === "string" && b.apiKey.trim()) {
     try { ensureCipherReady(); } catch (e: any) {
