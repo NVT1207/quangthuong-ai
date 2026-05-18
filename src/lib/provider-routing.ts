@@ -318,29 +318,73 @@ export type EndpointKind =
   | "audio_speech"
   | "audio_transcriptions";
 
+// Một số upstream gateway dùng path khác chuẩn OpenAI.
+// Map host → path quirk. Cứ thêm vào đây khi gặp provider mới có path lạ.
+//   - beeknoee: /image/generations (số ít), KHÔNG phải /images/generations
+const HOST_PATH_QUIRKS: Record<string, Partial<Record<EndpointKind, string>>> = {
+  "platform.beeknoee.com": {
+    images: "/image/generations",
+  },
+};
+
+function hostOf(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+// Nếu baseUrl đã chứa sẵn path endpoint (vd admin điền full URL tới /image/generations)
+// thì dùng nguyên xi, không append nữa. Detect bằng việc URL có path segment cuối khớp pattern endpoint.
+function baseUrlIsFullEndpoint(baseUrl: string, kind: EndpointKind): boolean {
+  try {
+    const u = new URL(baseUrl);
+    const path = u.pathname.toLowerCase();
+    // Heuristic: nếu path kết thúc bằng /generations | /messages | /completions | /speech | /transcriptions
+    // → admin đã điền full endpoint, không append nữa.
+    if (kind === "images" || kind === "videos") return /\/generations\/?$/.test(path) || /\/videos?\/?$/.test(path);
+    if (kind === "audio_speech") return /\/speech\/?$/.test(path);
+    if (kind === "audio_transcriptions") return /\/transcriptions\/?$/.test(path);
+    if (kind === "chat") return /\/(chat\/)?completions\/?$/.test(path);
+    if (kind === "messages") return /\/messages\/?$/.test(path);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // Endpoint URL theo provider type
 export function buildEndpointUrl(
   type: ProviderType,
   baseUrl: string,
   kind: EndpointKind
 ): string {
+  // Escape hatch: admin điền sẵn full endpoint URL → dùng nguyên xi.
+  if (baseUrlIsFullEndpoint(baseUrl, kind)) {
+    return stripTrailing(baseUrl);
+  }
+
+  // Apply host quirk nếu có (vd beeknoee dùng /image/generations).
+  const quirk = HOST_PATH_QUIRKS[hostOf(baseUrl)]?.[kind];
+
   // Image / Video / Audio endpoint — chỉ OPENAI / OPENAI_COMPATIBLE chạy được.
   // GEMINI/ANTHROPIC/OLLAMA chưa có endpoint chuẩn → throw để admin tạo provider OPENAI_COMPATIBLE
   // trỏ về OpenAI gateway / OpenRouter / Replicate.
   if (kind === "images") {
-    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/images/generations`;
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}${quirk ?? "/images/generations"}`;
     throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ image generation. Tạo provider OPENAI_COMPATIBLE.`);
   }
   if (kind === "videos") {
-    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/videos`;
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}${quirk ?? "/videos"}`;
     throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ video generation. Tạo provider OPENAI_COMPATIBLE.`);
   }
   if (kind === "audio_speech") {
-    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/audio/speech`;
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}${quirk ?? "/audio/speech"}`;
     throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ TTS. Tạo provider OPENAI_COMPATIBLE.`);
   }
   if (kind === "audio_transcriptions") {
-    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}/audio/transcriptions`;
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}${quirk ?? "/audio/transcriptions"}`;
     throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ STT. Tạo provider OPENAI_COMPATIBLE.`);
   }
 
