@@ -94,9 +94,14 @@ function envFallback(modelSlug: string): ResolvedUpstream {
       "Upstream chưa cấu hình — model chưa gán Provider và BEEKNOEE_BASE_URL/API_KEY env trống."
     );
   }
+  // Một số gateway (ChiaSeGPU) tách host cho image/video. Cho phép env override.
+  const imagesBaseUrl = process.env.BEEKNOEE_IMAGES_BASE_URL
+    ? stripTrailing(process.env.BEEKNOEE_IMAGES_BASE_URL)
+    : undefined;
   return {
     source: "ENV_FALLBACK",
     baseUrl,
+    imagesBaseUrl,
     apiKey,
     providerType: "OPENAI_COMPATIBLE",
     upstreamModelSlug: modelSlug,
