@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo } from "react";
-import { Zap, Clock, Search } from "lucide-react";
+import { Zap, Clock, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { formatNumber, formatUSD } from "@/lib/format";
 import { CopySlug } from "./copy-slug";
 import { TIER_LABEL, type Tier } from "@/lib/tier-config";
@@ -22,7 +22,161 @@ type ModelItem = {
   speedTps: number;
   latencyMs: number;
   uptimeStatus: string;
+  modality?: string | null;
+  pricingData?: any | null;
 };
+
+// Lấy giá thấp nhất từ matrix để show "Từ X /ảnh", phòng khi inputPrice cũ = 0.
+function minPriceFromPricing(m: ModelItem): number | null {
+  const p = m.pricingData;
+  if (!p) return null;
+  if (m.modality === "IMAGE" && Array.isArray(p.matrix)) {
+    const prices = p.matrix.map((r: any) => Number(r.price)).filter((x: number) => x > 0);
+    return prices.length ? Math.min(...prices) : null;
+  }
+  if (m.modality === "VIDEO" && Array.isArray(p.matrix)) {
+    const prices = p.matrix.map((r: any) => Number(r.price)).filter((x: number) => x > 0);
+    return prices.length ? Math.min(...prices) : null;
+  }
+  if (m.modality === "AUDIO_TTS" && Number.isFinite(p.charRate)) return Number(p.charRate);
+  if (m.modality === "AUDIO_STT" && Number.isFinite(p.minuteRate)) return Number(p.minuteRate);
+  return null;
+}
+
+// Đơn vị hiển thị cho từng modality.
+function unitForModality(m: ModelItem): string {
+  switch (m.modality) {
+    case "IMAGE": return "/ảnh";
+    case "VIDEO": return "/video";
+    case "AUDIO_TTS": return "/1M ký tự";
+    case "AUDIO_STT": return "/phút";
+    default: return m.priceUnit === "1M tokens" ? "/1M" : `/${m.priceUnit}`;
+  }
+}
+
+// Bảng giá chi tiết theo modality — collapsible.
+function PricingDetail({ m, discount }: { m: ModelItem; discount: number }) {
+  const [open, setOpen] = useState(false);
+  if (!m.modality || m.modality === "TEXT" || m.modality === "EMBEDDING") return null;
+  const p = m.pricingData;
+  if (!p) return null;
+
+  const factor = 1 - discount / 100;
+  const fmt = (v: number) => formatUSD(v * factor);
+
+  let body: React.ReactNode = null;
+  let summary = "";
+
+  if (m.modality === "IMAGE" && Array.isArray(p.matrix)) {
+    summary = `${p.matrix.length} combo size × quality`;
+    body = (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="text-ink-200/50">
+            <tr className="border-b border-white/5">
+              <th className="text-left py-1.5 pr-2 font-normal">Size</th>
+              <th className="text-left py-1.5 pr-2 font-normal">Quality</th>
+              <th className="text-right py-1.5 font-normal">Giá</th>
+            </tr>
+          </thead>
+          <tbody>
+            {p.matrix.map((r: any, i: number) => (
+              <tr key={i} className="border-b border-white/5 last:border-0">
+                <td className="py-1 pr-2 font-mono text-ink-200/80">{r.size}</td>
+                <td className="py-1 pr-2 text-ink-200/70">{r.quality}</td>
+                <td className="py-1 text-right text-honey-300">{fmt(Number(r.price))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  } else if (m.modality === "VIDEO" && Array.isArray(p.matrix)) {
+    summary = `${p.matrix.length} combo resolution × duration`;
+    body = (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="text-ink-200/50">
+            <tr className="border-b border-white/5">
+              <th className="text-left py-1.5 pr-2 font-normal">Resolution</th>
+              <th className="text-left py-1.5 pr-2 font-normal">Duration</th>
+              <th className="text-right py-1.5 font-normal">Giá</th>
+            </tr>
+          </thead>
+          <tbody>
+            {p.matrix.map((r: any, i: number) => (
+              <tr key={i} className="border-b border-white/5 last:border-0">
+                <td className="py-1 pr-2 font-mono text-ink-200/80">{r.resolution}</td>
+                <td className="py-1 pr-2 text-ink-200/70">{r.duration}</td>
+                <td className="py-1 text-right text-honey-300">{fmt(Number(r.price))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  } else if (m.modality === "AUDIO_TTS") {
+    const voices = Array.isArray(p.voices) ? p.voices : [];
+    summary = `${voices.length} giọng đọc`;
+    body = (
+      <div className="space-y-2">
+        <div className="text-xs text-ink-200/60">
+          Rate: <span className="text-honey-300 font-semibold">{fmt(Number(p.charRate) || 0)}</span>
+          <span className="text-ink-200/40"> / 1M ký tự</span>
+        </div>
+        {voices.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {voices.map((v: any) => (
+              <span
+                key={v.id}
+                className="text-[11px] px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-ink-200/80"
+                title={v.gender ? `${v.name} • ${v.gender}` : v.name}
+              >
+                {v.name || v.id}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  } else if (m.modality === "AUDIO_STT") {
+    const langs = Array.isArray(p.languages) ? p.languages : [];
+    summary = `${langs.length} ngôn ngữ`;
+    body = (
+      <div className="space-y-2">
+        <div className="text-xs text-ink-200/60">
+          Rate: <span className="text-honey-300 font-semibold">{fmt(Number(p.minuteRate) || 0)}</span>
+          <span className="text-ink-200/40"> / phút audio</span>
+        </div>
+        {langs.length > 0 && (
+          <div className="text-[11px] text-ink-200/60 leading-relaxed">
+            <span className="text-ink-200/40">Ngôn ngữ: </span>
+            {langs.slice(0, 20).map((l: string) => (
+              <span key={l} className="font-mono mr-1">{l}</span>
+            ))}
+            {langs.length > 20 && <span className="text-ink-200/40">… +{langs.length - 20} khác</span>}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!body) return null;
+
+  return (
+    <div className="mb-3 border-t border-white/5 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between text-xs text-ink-200/60 hover:text-ink-200 transition"
+      >
+        <span>Bảng giá chi tiết · <span className="text-ink-200/40">{summary}</span></span>
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {open && <div className="mt-2">{body}</div>}
+    </div>
+  );
+}
 
 const PROVIDER_COLOR: Record<string, string> = {
   openai: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
@@ -273,7 +427,10 @@ export function ModelsBrowser({
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((m) => {
             const uptime = UPTIME_STYLE[m.uptimeStatus] ?? UPTIME_STYLE.good;
-            const unitShort = m.priceUnit === "1M tokens" ? "/1M" : `/${m.priceUnit}`;
+            const unitShort = unitForModality(m);
+            const discount = discountForTier(m, userTier);
+            const isMatrixModality = m.modality === "IMAGE" || m.modality === "VIDEO" || m.modality === "AUDIO_TTS" || m.modality === "AUDIO_STT";
+            const minPrice = isMatrixModality ? minPriceFromPricing(m) : null;
             return (
               <div key={m.id} className="card p-5 flex flex-col">
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -300,24 +457,37 @@ export function ModelsBrowser({
                 <DiscountRow m={m} userTier={userTier} />
 
                 <div className="space-y-1 text-sm mb-3">
-                  <PriceLine
-                    label={showOutput ? "Input" : "Giá"}
-                    price={m.inputPrice}
-                    discount={discountForTier(m, userTier)}
-                    unitShort={unitShort}
-                  />
-                  {showOutput && m.outputPrice > 0 && (
+                  {isMatrixModality && minPrice !== null ? (
                     <PriceLine
-                      label="Output"
-                      price={m.outputPrice}
-                      discount={discountForTier(m, userTier)}
+                      label={m.modality === "IMAGE" ? "Từ" : m.modality === "VIDEO" ? "Từ" : "Giá"}
+                      price={minPrice}
+                      discount={discount}
                       unitShort={unitShort}
                     />
+                  ) : (
+                    <>
+                      <PriceLine
+                        label={showOutput ? "Input" : "Giá"}
+                        price={m.inputPrice}
+                        discount={discount}
+                        unitShort={unitShort}
+                      />
+                      {showOutput && m.outputPrice > 0 && (
+                        <PriceLine
+                          label="Output"
+                          price={m.outputPrice}
+                          discount={discount}
+                          unitShort={unitShort}
+                        />
+                      )}
+                    </>
                   )}
                   {showContext && m.contextLength > 0 && (
                     <div className="flex justify-between"><span className="text-ink-200/50">Context</span><span>{formatNumber(m.contextLength)} tokens</span></div>
                   )}
                 </div>
+
+                <PricingDetail m={m} discount={discount} />
 
                 {(m.speedTps > 0 || m.latencyMs > 0) && (
                   <div className="flex items-center gap-3 text-xs text-ink-200/60 mb-3">

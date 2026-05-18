@@ -11,7 +11,7 @@ export default async function VideoModelsPage() {
       providers={providers}
       userTier={userTier}
       title="Video Models"
-      subtitle={`${models.length} model sinh video. Giá tính theo VND / 1 giây.`}
+      subtitle={`${models.length} model sinh video. Giá VND / video — mở "Bảng giá chi tiết" để xem matrix resolution × duration.`}
       showOutput={false}
       showContext={false}
     />

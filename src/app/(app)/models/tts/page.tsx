@@ -11,7 +11,7 @@ export default async function TtsModelsPage() {
       providers={providers}
       userTier={userTier}
       title="TTS Models"
-      subtitle={`${models.length} model text-to-speech. Giá tính theo VND / 1M ký tự.`}
+      subtitle={`${models.length} model text-to-speech. Giá VND / 1M ký tự — mở "Bảng giá chi tiết" để xem danh sách giọng đọc.`}
       showOutput={false}
       showContext={false}
     />

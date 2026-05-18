@@ -42,6 +42,8 @@ export async function loadModelsByCategory(categories: string[]) {
       speedTps: m.speedTps,
       latencyMs: m.latencyMs,
       uptimeStatus: m.uptimeStatus,
+      modality: m.modality,
+      pricingData: m.pricingData as any,
     })),
   };
 }

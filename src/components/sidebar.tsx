@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
-  LayoutDashboard, Cpu, Video, ImageIcon, Volume2, MessageSquareText,
+  LayoutDashboard, Cpu, Video, ImageIcon, Volume2, Mic, MessageSquareText,
   KeyRound, Activity, Wallet, Users2, BookOpen, Bell, FileText,
   Settings, LogOut, Shield, Boxes, ListChecks, Receipt, Tag,
 } from "lucide-react";
@@ -24,6 +24,7 @@ const userGroups: Group[] = [
       { href: "/models/video", label: "Video Models", icon: Video },
       { href: "/models/image", label: "Image Models", icon: ImageIcon },
       { href: "/models/tts", label: "TTS Models", icon: Volume2 },
+      { href: "/models/stt", label: "STT Models", icon: Mic },
       { href: "/playground", label: "Playground", icon: MessageSquareText },
     ],
   },

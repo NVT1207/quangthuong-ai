@@ -3,15 +3,15 @@ import { loadModelsByCategory } from "../_helpers";
 
 export const dynamic = "force-dynamic";
 
-export default async function ImageModelsPage() {
-  const { models, providers, userTier } = await loadModelsByCategory(["image"]);
+export default async function SttModelsPage() {
+  const { models, providers, userTier } = await loadModelsByCategory(["stt"]);
   return (
     <ModelsBrowser
       models={models}
       providers={providers}
       userTier={userTier}
-      title="Image Models"
-      subtitle={`${models.length} model tạo ảnh. Giá VND / ảnh — mở "Bảng giá chi tiết" để xem matrix size × quality.`}
+      title="STT Models"
+      subtitle={`${models.length} model speech-to-text (Whisper). Giá tính theo VND / phút audio.`}
       showOutput={false}
       showContext={false}
     />
