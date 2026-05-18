@@ -59,7 +59,29 @@ export async function approveTopup(topupId: string, opts: ApproveOpts = {}): Pro
   const credited = opts.receivedAmount ?? t.amount;
   // Bonus tính theo số THỰC nhận (user chuyển ít hơn → bonus theo bậc thấp hơn)
   const bonus = topupBonus(credited);
-  const newBalance = t.user.balance + credited + bonus;
+
+  // Promo bonus: snapshot khi tạo TopupRequest. CHỈ áp dụng nếu user chuyển ĐỦ amount đăng ký
+  // (tránh trường hợp user chuyển ít hơn để vẫn ăn % bonus của mức cao).
+  let promoBonusToCredit = 0;
+  let promoCodeRecord: { id: string; code: string } | null = null;
+  if (t.promoCode && t.promoBonus && t.promoBonus > 0 && credited >= t.amount) {
+    const promo = await prisma.promoCode.findUnique({
+      where: { code: t.promoCode },
+      select: { id: true, code: true, enabled: true, expiresAt: true, maxUses: true, usedCount: true },
+    });
+    if (promo && promo.enabled) {
+      const now = new Date();
+      const notExpired = !promo.expiresAt || now <= promo.expiresAt;
+      const hasQuota = promo.maxUses == null || promo.usedCount < promo.maxUses;
+      if (notExpired && hasQuota) {
+        promoBonusToCredit = t.promoBonus;
+        promoCodeRecord = { id: promo.id, code: promo.code };
+      }
+    }
+  }
+
+  const totalBonus = bonus + promoBonusToCredit;
+  const newBalance = t.user.balance + credited + totalBonus;
   const methodLabel = METHOD_LABEL[t.method] || t.method;
 
   const autoSuffix = opts.autoApproved ? " (tự động duyệt)" : "";
@@ -67,11 +89,14 @@ export async function approveTopup(topupId: string, opts: ApproveOpts = {}): Pro
     ? ` (thực nhận ${credited.toLocaleString("vi-VN")}₫ vs đăng ký ${t.amount.toLocaleString("vi-VN")}₫)`
     : "";
   const sourceSuffix = opts.sourceLabel ? ` — ${opts.sourceLabel}` : "";
+  const promoSuffix = promoBonusToCredit > 0 && promoCodeRecord
+    ? ` + ưu đãi ${promoCodeRecord.code} ${promoBonusToCredit.toLocaleString("vi-VN")}₫`
+    : "";
 
   const description =
     `Nạp tiền qua ${methodLabel}${t.reference ? ` (${t.reference})` : ""}` +
     `${bonus > 0 ? ` + thưởng mệnh giá ${bonus.toLocaleString("vi-VN")}₫` : ""}` +
-    `${amountSuffix}${autoSuffix}${sourceSuffix}`;
+    `${promoSuffix}${amountSuffix}${autoSuffix}${sourceSuffix}`;
 
   const ops: any[] = [
     prisma.topupRequest.update({
@@ -89,13 +114,32 @@ export async function approveTopup(topupId: string, opts: ApproveOpts = {}): Pro
       data: {
         userId: t.userId,
         type: "TOPUP",
-        amount: credited + bonus,
+        amount: credited + totalBonus,
         balanceAfter: newBalance,
         description,
         refId: t.id,
       },
     }),
   ];
+
+  // Promo redemption: ghi nhận lần dùng mã + tăng usedCount của PromoCode
+  if (promoCodeRecord && promoBonusToCredit > 0) {
+    ops.push(
+      prisma.promoRedemption.create({
+        data: {
+          promoCodeId: promoCodeRecord.id,
+          userId: t.userId,
+          topupId: t.id,
+          amount: credited,
+          bonus: promoBonusToCredit,
+        },
+      }),
+      prisma.promoCode.update({
+        where: { id: promoCodeRecord.id },
+        data: { usedCount: { increment: 1 } },
+      }),
+    );
+  }
 
   // Affiliate commission (chỉ tính trên số THỰC nhận, không tính bonus)
   if (t.user.referredById && t.user.referredById !== t.userId) {
@@ -139,7 +183,7 @@ export async function approveTopup(topupId: string, opts: ApproveOpts = {}): Pro
     topupId: t.id,
     userId: t.userId,
     amountCredited: credited,
-    bonus,
+    bonus: totalBonus,
     newBalance,
   };
 }

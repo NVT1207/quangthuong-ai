@@ -3,13 +3,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, QrCode, CreditCard, Apple, Tag, Gift, Copy, Check, X, Banknote } from "lucide-react";
 import { formatVND } from "@/lib/format";
-import { PRESET_AMOUNTS, PROMO_CODES } from "@/lib/topup";
+import { PRESET_AMOUNTS } from "@/lib/topup";
 
 type TopupResult = {
   id: string;
   reference: string;
   qrUrl: string;
   bonus: number;
+  promoBonus?: number;
+  promoCode?: string | null;
   bank: {
     bankName: string;
     accountNumber: string;
@@ -30,7 +32,8 @@ export function TopupForm() {
   const [amount, setAmount] = useState<number>(0);
   const [amountStr, setAmountStr] = useState("");
   const [promo, setPromo] = useState("");
-  const [promoApplied, setPromoApplied] = useState<string | null>(null);
+  const [promoApplied, setPromoApplied] = useState<{ code: string; bonus: number; description: string | null } | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
   const [method, setMethod] = useState("qr");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +43,7 @@ export function TopupForm() {
     setAmount(v);
     setAmountStr(v.toLocaleString("vi-VN"));
     setError("");
+    if (promoApplied) setPromoApplied(null);
   }
 
   function onAmountChange(v: string) {
@@ -48,17 +52,48 @@ export function TopupForm() {
     setAmount(n);
     setAmountStr(n ? n.toLocaleString("vi-VN") : "");
     setError("");
+    // Reset promo khi đổi amount — phải validate lại vì bonus phụ thuộc amount
+    if (promoApplied) setPromoApplied(null);
   }
 
-  function applyPromo() {
+  async function applyPromo() {
     const code = promo.trim().toUpperCase();
     if (!code) return;
-    if (PROMO_CODES.includes(code)) {
-      setPromoApplied(code);
-      setError("");
-    } else {
+    if (amount < 20000) {
+      setError("Nhập số tiền nạp trước rồi mới áp dụng mã");
+      return;
+    }
+    setPromoChecking(true);
+    setError("");
+    try {
+      const r = await fetch("/api/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, amount }),
+      });
+      // Có thể server trả non-JSON (vd. route 404 / 500 chưa deploy) → catch luôn
+      let d: any = null;
+      try { d = await r.json(); } catch { /* not json */ }
+      if (!r.ok || !d || d.ok === false) {
+        setPromoApplied(null);
+        const reason =
+          d?.reason ||
+          d?.error ||
+          (r.status === 404
+            ? "API chưa tồn tại — cần redeploy"
+            : r.status === 503
+              ? "Hệ thống mã ưu đãi chưa khởi tạo (chưa chạy prisma db push)"
+              : `Lỗi ${r.status}`);
+        setError(reason);
+      } else {
+        setPromoApplied({ code: d.code, bonus: d.bonus, description: d.description ?? null });
+        setError("");
+      }
+    } catch (e: any) {
+      setError(e.message || "Lỗi mạng khi kiểm tra mã");
       setPromoApplied(null);
-      setError("Mã khuyến mãi không hợp lệ");
+    } finally {
+      setPromoChecking(false);
     }
   }
 
@@ -72,7 +107,7 @@ export function TopupForm() {
     const r = await fetch("/api/topup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount, method, promoCode: promoApplied || undefined }),
+      body: JSON.stringify({ amount, method, promoCode: promoApplied?.code || undefined }),
     });
     const data = await r.json();
     setLoading(false);
@@ -191,18 +226,27 @@ export function TopupForm() {
               <button
                 type="button"
                 onClick={applyPromo}
-                disabled={!promo.trim()}
+                disabled={!promo.trim() || promoChecking}
                 className="btn btn-ghost text-xs px-3 shrink-0"
               >
-                Áp dụng
+                {promoChecking ? <Loader2 size={12} className="animate-spin" /> : "Áp dụng"}
               </button>
             </div>
           </div>
         </div>
 
         {promoApplied && (
-          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
-            <Check size={12} /> Đã áp dụng mã <strong className="font-mono tracking-widest">{promoApplied}</strong>
+          <div className="flex items-start gap-2 mb-3 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
+            <Check size={12} className="mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div>
+                Đã áp dụng mã <strong className="font-mono tracking-widest">{promoApplied.code}</strong> — bonus{" "}
+                <strong>+{formatVND(promoApplied.bonus)}</strong>
+              </div>
+              {promoApplied.description && (
+                <div className="text-emerald-300/70 mt-0.5">{promoApplied.description}</div>
+              )}
+            </div>
           </div>
         )}
 
@@ -231,7 +275,8 @@ function QrModal({ result, amount, onClose }: { result: TopupResult; amount: num
     setCopied(key);
     setTimeout(() => setCopied(null), 1500);
   }
-  const total = amount + result.bonus;
+  const promoBonus = result.promoBonus ?? 0;
+  const total = amount + result.bonus + promoBonus;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -258,10 +303,20 @@ function QrModal({ result, amount, onClose }: { result: TopupResult; amount: num
           <div className="text-center">
             <p className="text-xs text-ink-200/50 mb-0.5">Số tiền chuyển</p>
             <p className="text-2xl font-bold text-honey-300">{formatVND(amount)}</p>
-            {result.bonus > 0 && (
-              <p className="text-xs text-emerald-300 mt-1 flex items-center justify-center gap-1">
-                <Gift size={11} /> Được tặng thêm {formatVND(result.bonus)} sau khi duyệt → tổng {formatVND(total)}
-              </p>
+            {(result.bonus > 0 || promoBonus > 0) && (
+              <div className="mt-1 space-y-0.5">
+                {result.bonus > 0 && (
+                  <p className="text-xs text-emerald-300 flex items-center justify-center gap-1">
+                    <Gift size={11} /> Thưởng mệnh giá +{formatVND(result.bonus)}
+                  </p>
+                )}
+                {promoBonus > 0 && (
+                  <p className="text-xs text-emerald-300 flex items-center justify-center gap-1">
+                    <Tag size={11} /> Mã {result.promoCode} +{formatVND(promoBonus)}
+                  </p>
+                )}
+                <p className="text-xs text-honey-200 font-semibold">Tổng nhận: {formatVND(total)}</p>
+              </div>
             )}
           </div>
 

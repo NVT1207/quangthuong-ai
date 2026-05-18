@@ -166,9 +166,12 @@ model TopupRequest {
   processedAt    DateTime?
   autoApproved   Boolean          @default(false)
   receivedAmount Float?
+  promoCode      String?          // mã user nhập lúc tạo (UPPERCASE), null nếu không có
+  promoBonus     Float?           // bonus tính từ promo code (lưu lại để approveTopup khỏi tính lại)
   createdAt      DateTime         @default(now())
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   bankTx         BankTransaction?
+  promoRedemption PromoRedemption?
 }
 
 // Log toàn bộ giao dịch ngân hàng nhận từ webhook (Sepay/Casso).
@@ -253,4 +256,50 @@ model ChangelogEntry {
   kind       String   @default("feature") // feature | fix | improvement
   releasedAt DateTime @default(now())
   createdAt  DateTime @default(now())
+}
+
+// ─── Mã ưu đãi nạp tiền ──────────────────────────────────────────────────
+// Admin tạo mã. User nhập tại /topup. Khi topup được approve, bonus tính theo
+// percent (vd 10% × số tiền nạp) hoặc số tiền cố định, cộng vào balance cùng
+// lúc với bonus mệnh giá có sẵn.
+model PromoCode {
+  id              String            @id @default(cuid())
+  code            String            @unique // UPPERCASE, vd "APIONDINH"
+  description     String?
+  // Loại bonus: PERCENT (bonusPercent × amount) hoặc FIXED (bonusAmount cố định)
+  bonusType       String            @default("PERCENT") // PERCENT | FIXED
+  bonusPercent    Float             @default(0)         // 0-100, dùng khi PERCENT
+  bonusAmount     Float             @default(0)         // VND, dùng khi FIXED
+  minAmount       Float             @default(0)         // số tiền nạp tối thiểu để áp dụng (VND)
+  maxBonus        Float?            // cap bonus (vd 10% × 100M = 10M nhưng cap 5M)
+  // Điều kiện sử dụng
+  firstUseOnly    Boolean           @default(false)     // chỉ áp dụng cho user CHƯA TỪNG DÙNG mã này
+  // Lifecycle
+  enabled         Boolean           @default(true)
+  startsAt        DateTime?         // null = áp dụng ngay
+  expiresAt       DateTime?         // null = không hết hạn
+  maxUses         Int?              // null = không giới hạn tổng số lượt dùng
+  usedCount       Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  redemptions     PromoRedemption[]
+
+  @@index([enabled, expiresAt])
+}
+
+// Ghi nhận mỗi lần user áp dụng mã thành công (topup được duyệt).
+// 1 topup = 1 redemption (unique trên topupId). Dùng để check firstUseOnly + lịch sử.
+model PromoRedemption {
+  id          String       @id @default(cuid())
+  promoCodeId String
+  userId      String
+  topupId     String       @unique
+  amount      Float        // số tiền nạp tại thời điểm áp
+  bonus       Float        // bonus đã cộng cho user
+  createdAt   DateTime     @default(now())
+  promoCode   PromoCode    @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  topup       TopupRequest @relation(fields: [topupId], references: [id], onDelete: Cascade)
+
+  @@index([promoCodeId, userId])
+  @@index([userId])
 }

@@ -13,7 +13,9 @@ export const PRESET_AMOUNTS: { value: number; bonus: number }[] = [
   { value: 100_000_000, bonus: 5_000_000 },
 ];
 
-export const PROMO_CODES = ["BEEWELCOME", "BEELOYALTY", "BEEFORYOU"];
+// Legacy hardcoded promo list — đã chuyển sang model PromoCode trong DB.
+// Giữ export trống để backward-compat phòng UI cũ cache. KHÔNG dùng nữa.
+export const PROMO_CODES: string[] = [];
 
 export function topupBonus(amount: number): number {
   if (amount >= 100_000_000) return 5_000_000;
