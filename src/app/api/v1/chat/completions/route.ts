@@ -5,7 +5,7 @@ import { countTokens, computeCost } from "@/lib/pricing";
 import { callUpstream, readNonStream, UpstreamError, isUpstreamConfigured, describeAdminKeyError } from "@/lib/upstream";
 import { checkApiKeyRateLimit, RATE_LIMIT_PER_MIN } from "@/lib/rate-limit";
 import { tierDiscountField, type Tier } from "@/lib/tier";
-import { formatVND } from "@/lib/format";
+import { INSUFFICIENT_BALANCE_MESSAGE } from "@/lib/modality-route-helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -124,12 +124,12 @@ export async function POST(req: Request) {
   // Pre-check số dư: phải có tiền mới được gọi. Chặn ngay nếu balance <= 0 hoặc không đủ trả input.
   if (key.user.balance <= 0) {
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip });
-    return err(402, `Số dư tài khoản bằng 0. Vui lòng nạp tiền tại https://quangthuong-ai.vercel.app/topup trước khi sử dụng API.`, "insufficient_balance");
+    return err(402, INSUFFICIENT_BALANCE_MESSAGE, "insufficient_balance");
   }
   const minCost = computeCost(estInputTokens, 0, model.inputPrice, model.outputPrice, discount);
   if (key.user.balance < minCost) {
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402, ip });
-    return err(402, `Số dư không đủ (hiện có ${formatVND(key.user.balance)}, cần tối thiểu ${formatVND(minCost)} cho prompt này). Nạp thêm tại https://quangthuong-ai.vercel.app/topup`, "insufficient_balance");
+    return err(402, INSUFFICIENT_BALANCE_MESSAGE, "insufficient_balance");
   }
 
   // Gom các option pass-through chuẩn OpenAI
@@ -263,7 +263,7 @@ export async function POST(req: Request) {
   const balance = fresh?.balance ?? key.user.balance;
   if (balance < cost) {
     await logUsage({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, inputTokens, outputTokens: 0, cost: 0, status: 402, ip });
-    return err(402, `Số dư không đủ sau khi tính phí (cần ${formatVND(cost)}, hiện có ${formatVND(balance)}). Nạp thêm tại https://quangthuong-ai.vercel.app/topup`, "insufficient_balance");
+    return err(402, INSUFFICIENT_BALANCE_MESSAGE, "insufficient_balance");
   }
   await chargeUser({
     userId: key.userId, apiKeyId: key.id, balance, cost,

@@ -12,9 +12,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeImageCost, type ImagePricing } from "@/lib/pricing";
-import { formatVND } from "@/lib/format";
 import { authHeaders, buildEndpointUrl, callWithFailover, UpstreamError } from "@/lib/provider-routing";
-import { loadCallContext, chargeModality, logModalityError, err } from "@/lib/modality-route-helpers";
+import { loadCallContext, chargeModality, logModalityError, err, INSUFFICIENT_BALANCE_MESSAGE } from "@/lib/modality-route-helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 180; // image-edit nhận tới 4 ảnh ref → cần lâu hơn generations
@@ -88,15 +87,11 @@ export async function POST(req: Request) {
   // Pre-check balance
   if (key.user.balance <= 0) {
     await logModalityError({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, modality: "IMAGE", unitsMeta, status: 402, ip });
-    return err(402, `Số dư bằng 0. Nạp tại https://quangthuong-ai.vercel.app/topup.`, "insufficient_balance");
+    return err(402, INSUFFICIENT_BALANCE_MESSAGE, "insufficient_balance");
   }
   if (key.user.balance < cost) {
     await logModalityError({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, modality: "IMAGE", unitsMeta, status: 402, ip });
-    return err(
-      402,
-      `Số dư không đủ (cần ${formatVND(cost)}, có ${formatVND(key.user.balance)}). Nạp tại https://quangthuong-ai.vercel.app/topup.`,
-      "insufficient_balance",
-    );
+    return err(402, INSUFFICIENT_BALANCE_MESSAGE, "insufficient_balance");
   }
 
   // Forward upstream với multipart FormData
