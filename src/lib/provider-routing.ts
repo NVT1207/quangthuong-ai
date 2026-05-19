@@ -321,9 +321,11 @@ export type EndpointKind =
 // Một số upstream gateway dùng path khác chuẩn OpenAI.
 // Map host → path quirk. Cứ thêm vào đây khi gặp provider mới có path lạ.
 //   - beeknoee: /image/generations (số ít), KHÔNG phải /images/generations
+//   - beeknoee: /video/generations (số ít), KHÔNG phải /videos
 const HOST_PATH_QUIRKS: Record<string, Partial<Record<EndpointKind, string>>> = {
   "platform.beeknoee.com": {
     images: "/image/generations",
+    videos: "/video/generations",
   },
 };
 
