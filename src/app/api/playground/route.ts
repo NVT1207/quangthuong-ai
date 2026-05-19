@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { countTokens, computeCost } from "@/lib/pricing";
 import { callUpstream, readNonStream, isUpstreamConfigured, UpstreamError, describeAdminKeyError } from "@/lib/upstream";
 import { tierDiscountField, type Tier } from "@/lib/tier";
-import { formatVND } from "@/lib/format";
+import { INSUFFICIENT_BALANCE_MESSAGE } from "@/lib/modality-route-helpers";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402 },
     });
     return NextResponse.json(
-      { error: "Số dư tài khoản bằng 0. Vui lòng nạp tiền tại /topup trước khi sử dụng.", code: "insufficient_balance", topupUrl: "/topup" },
+      { error: INSUFFICIENT_BALANCE_MESSAGE, code: "insufficient_balance", topupUrl: "/topup" },
       { status: 402 },
     );
   }
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens: estInputTokens, outputTokens: 0, cost: 0, status: 402 },
     });
     return NextResponse.json(
-      { error: `Số dư không đủ (hiện có ${formatVND(user!.balance)}, cần tối thiểu ${formatVND(minCost)}). Nạp thêm tại /topup`, code: "insufficient_balance", topupUrl: "/topup" },
+      { error: INSUFFICIENT_BALANCE_MESSAGE, code: "insufficient_balance", topupUrl: "/topup" },
       { status: 402 },
     );
   }
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
       data: { userId: user!.id, apiKeyId: key.id, modelSlug: m.slug, inputTokens, outputTokens: 0, cost: 0, status: 402 },
     });
     return NextResponse.json(
-      { error: `Số dư không đủ sau khi tính phí (cần ${formatVND(cost)}, hiện có ${formatVND(balance)}). Nạp thêm tại /topup`, code: "insufficient_balance", topupUrl: "/topup" },
+      { error: INSUFFICIENT_BALANCE_MESSAGE, code: "insufficient_balance", topupUrl: "/topup" },
       { status: 402 },
     );
   }

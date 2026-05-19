@@ -5,9 +5,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeSttCost, type SttPricing } from "@/lib/pricing";
-import { formatVND } from "@/lib/format";
 import { authHeaders, buildEndpointUrl, callWithFailover, UpstreamError } from "@/lib/provider-routing";
-import { authenticate, getIp, getDiscount, chargeModality, logModalityError, err } from "@/lib/modality-route-helpers";
+import { authenticate, getIp, getDiscount, chargeModality, logModalityError, err, INSUFFICIENT_BALANCE_MESSAGE } from "@/lib/modality-route-helpers";
 import { checkApiKeyRateLimit, RATE_LIMIT_PER_MIN } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -73,15 +72,11 @@ export async function POST(req: Request) {
 
   if (key.user.balance <= 0) {
     await logModalityError({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, modality: "AUDIO_STT", unitsMeta: unitsMetaEst, status: 402, ip });
-    return err(402, `Số dư bằng 0. Nạp tại https://quangthuong-ai.vercel.app/topup.`, "insufficient_balance");
+    return err(402, INSUFFICIENT_BALANCE_MESSAGE, "insufficient_balance");
   }
   if (key.user.balance < estCost) {
     await logModalityError({ userId: key.userId, apiKeyId: key.id, modelSlug: model.slug, modality: "AUDIO_STT", unitsMeta: unitsMetaEst, status: 402, ip });
-    return err(
-      402,
-      `Số dư không đủ ước tính (file ${(fileSize / 1024 / 1024).toFixed(2)}MB ≈ ${estSeconds.toFixed(0)}s, cần ${formatVND(estCost)}, có ${formatVND(key.user.balance)}).`,
-      "insufficient_balance",
-    );
+    return err(402, INSUFFICIENT_BALANCE_MESSAGE, "insufficient_balance");
   }
 
   // Forward multipart upstream — phải dùng verbose_json để lấy duration cho billing chính xác.

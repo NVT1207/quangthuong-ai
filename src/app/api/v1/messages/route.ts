@@ -22,7 +22,7 @@ import {
   openaiToAnthropicResponse,
   createAnthropicStreamTranslator,
 } from "@/lib/anthropic-bridge";
-import { formatVND } from "@/lib/format";
+import { INSUFFICIENT_BALANCE_MESSAGE } from "@/lib/modality-route-helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -178,7 +178,7 @@ export async function POST(req: Request) {
     });
     return err(
       402,
-      `Số dư tài khoản bằng 0. Vui lòng nạp tiền tại https://quangthuong-ai.vercel.app/topup trước khi sử dụng Claude Code.`,
+      INSUFFICIENT_BALANCE_MESSAGE,
       "insufficient_balance",
     );
   }
@@ -190,7 +190,7 @@ export async function POST(req: Request) {
     });
     return err(
       402,
-      `Số dư không đủ (hiện có ${formatVND(key.user.balance)}, cần tối thiểu ${formatVND(minCost)} cho prompt này). Nạp thêm tại https://quangthuong-ai.vercel.app/topup`,
+      INSUFFICIENT_BALANCE_MESSAGE,
       "insufficient_balance",
     );
   }
@@ -417,7 +417,7 @@ export async function POST(req: Request) {
     });
     return err(
       402,
-      `Số dư không đủ sau khi tính phí (cần ${formatVND(cost)}, hiện có ${formatVND(balance)}). Nạp thêm tại https://quangthuong-ai.vercel.app/topup`,
+      INSUFFICIENT_BALANCE_MESSAGE,
       "insufficient_balance",
     );
   }

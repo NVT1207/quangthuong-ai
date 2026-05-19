@@ -11,6 +11,11 @@ export function err(status: number, message: string, type = "invalid_request_err
   return NextResponse.json({ error: { message, type, code: status } }, { status });
 }
 
+// Message thống nhất cho lỗi 402 — không lộ giá nội bộ ra ngoài.
+// Dùng cho mọi endpoint API khi user hết tiền hoặc số dư không đủ.
+export const INSUFFICIENT_BALANCE_MESSAGE =
+  "Số dư không đủ, vui lòng nạp tại https://quangthuong-ai.vercel.app/topup";
+
 export async function authenticate(req: Request) {
   const auth = req.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
