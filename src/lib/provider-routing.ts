@@ -314,6 +314,7 @@ export type EndpointKind =
   | "chat"
   | "messages"
   | "images"
+  | "images_edit"
   | "videos"
   | "audio_speech"
   | "audio_transcriptions";
@@ -325,6 +326,7 @@ export type EndpointKind =
 const HOST_PATH_QUIRKS: Record<string, Partial<Record<EndpointKind, string>>> = {
   "platform.beeknoee.com": {
     images: "/image/generations",
+    images_edit: "/image/edits",
     videos: "/video/generations",
   },
 };
@@ -346,6 +348,7 @@ function baseUrlIsFullEndpoint(baseUrl: string, kind: EndpointKind): boolean {
     // Heuristic: nếu path kết thúc bằng /generations | /messages | /completions | /speech | /transcriptions
     // → admin đã điền full endpoint, không append nữa.
     if (kind === "images" || kind === "videos") return /\/generations\/?$/.test(path) || /\/videos?\/?$/.test(path);
+    if (kind === "images_edit") return /\/edits\/?$/.test(path);
     if (kind === "audio_speech") return /\/speech\/?$/.test(path);
     if (kind === "audio_transcriptions") return /\/transcriptions\/?$/.test(path);
     if (kind === "chat") return /\/(chat\/)?completions\/?$/.test(path);
@@ -376,6 +379,10 @@ export function buildEndpointUrl(
   if (kind === "images") {
     if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}${quirk ?? "/images/generations"}`;
     throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ image generation. Tạo provider OPENAI_COMPATIBLE.`);
+  }
+  if (kind === "images_edit") {
+    if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}${quirk ?? "/images/edits"}`;
+    throw new UpstreamError(400, `Provider type ${type} chưa hỗ trợ image edit. Tạo provider OPENAI_COMPATIBLE.`);
   }
   if (kind === "videos") {
     if (type === "OPENAI" || type === "OPENAI_COMPATIBLE") return `${baseUrl}${quirk ?? "/videos"}`;
