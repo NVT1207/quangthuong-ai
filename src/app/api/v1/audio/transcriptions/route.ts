@@ -40,14 +40,14 @@ export async function POST(req: Request) {
   if (!key) return err(401, "Invalid API key", "authentication_error");
   if (key.user.status === "BANNED") return err(403, "Account banned", "permission_error");
   const ip = getIp(req);
-  const model = await prisma.model.findUnique({ where: { slug: modelSlug } });
+  const model = await prisma.model.findFirst({ where: { slug: modelSlug, active: true }, orderBy: { createdAt: "asc" } });
   if (!model || !model.active) return err(404, `Model '${modelSlug}' not found`, "not_found_error");
   if (model.modality !== "AUDIO_STT") {
     return err(400, `Model '${modelSlug}' là ${model.modality} — không hỗ trợ STT.`);
   }
 
-  const sub = await prisma.apiKeyModel.findUnique({
-    where: { apiKeyId_modelId: { apiKeyId: key.id, modelId: model.id } },
+  const sub = await prisma.apiKeyModel.findFirst({
+    where: { apiKeyId: key.id, enabled: true, model: { slug: modelSlug } },
     select: { enabled: true },
   });
   if (!sub || !sub.enabled) {

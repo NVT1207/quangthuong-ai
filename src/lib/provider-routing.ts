@@ -50,6 +50,7 @@ export type ResolvedUpstream = {
   source: "PROVIDER" | "ENV_FALLBACK";
   providerId?: string;
   keyId?: string;
+  modelRowId?: string; // id của Model row được pick (khi nhiều row trùng slug — dùng cho markModelError/Success)
   baseUrl: string; // không trailing slash
   imagesBaseUrl?: string; // override base URL cho image endpoint (vd ChiaSeGPU tách `llm-2.chiasegpu.vn/v1`)
   apiKey: string; // plaintext
@@ -165,11 +166,35 @@ async function pickKeyByStrategy(
   }
 }
 
+// Pick 1 Model row khoẻ nhất từ pool cùng slug.
+// Health check tương tự pickKeyByStrategy: errorCount < threshold OR đã qua cooldown.
+// Strategy: LRU (lastUsedAt asc) — phân tải đều giữa các key, key vừa fail tự bị tụt xuống cuối.
+function pickHealthyModel<T extends { id: string; errorCount: number; lastErrorAt: Date | null; lastUsedAt: Date | null }>(
+  rows: T[],
+): T | null {
+  if (rows.length === 0) return null;
+  if (rows.length === 1) return rows[0];
+  const now = Date.now();
+  const healthy = rows.filter((r) => {
+    if (r.errorCount < ERROR_THRESHOLD) return true;
+    if (!r.lastErrorAt) return true;
+    return now - r.lastErrorAt.getTime() >= ERROR_COOLDOWN_MS;
+  });
+  const pool = healthy.length > 0 ? healthy : rows; // hết healthy thì vẫn thử row đầu (lastErrorAt cũ nhất)
+  // LRU: row chưa dùng (lastUsedAt null) đứng đầu, sau đó tới row dùng lâu nhất.
+  return [...pool].sort((a, b) => {
+    const at = a.lastUsedAt?.getTime() ?? 0;
+    const bt = b.lastUsedAt?.getTime() ?? 0;
+    return at - bt;
+  })[0];
+}
+
 export async function resolveUpstream(
   modelSlug: string
 ): Promise<ResolvedUpstream> {
-  const model = await prisma.model.findUnique({
-    where: { slug: modelSlug },
+  // Findmany vì giờ slug không còn unique — nhiều row cùng slug = pool key cho failover.
+  const candidates = await prisma.model.findMany({
+    where: { slug: modelSlug, active: true },
     include: {
       providerRef: {
         include: {
@@ -181,9 +206,14 @@ export async function resolveUpstream(
     },
   });
 
-  if (!model) {
-    throw new UpstreamError(404, `Model '${modelSlug}' not found`);
+  if (candidates.length === 0) {
+    // Có thể model bị tắt (active=false) → check thêm row inactive để báo lỗi rõ
+    const anyRow = await prisma.model.findFirst({ where: { slug: modelSlug } });
+    if (!anyRow) throw new UpstreamError(404, `Model '${modelSlug}' not found`);
+    throw new UpstreamError(503, `Model '${modelSlug}' đang tắt — liên hệ admin.`);
   }
+
+  const model = pickHealthyModel(candidates) ?? candidates[0];
 
   // === ƯU TIÊN 1: Key gắn trực tiếp vào Model (flow mới, 1 model = 1 key) ===
   if (model.apiKeyEnc) {
@@ -211,6 +241,7 @@ export async function resolveUpstream(
     const type = normalizeProviderType(declaredType, baseUrl);
     return {
       source: "PROVIDER",
+      modelRowId: model.id,
       baseUrl,
       imagesBaseUrl: model.apiBaseUrlImages ? stripTrailing(model.apiBaseUrlImages) : undefined,
       apiKey: plaintext,
@@ -273,6 +304,7 @@ export async function resolveUpstream(
       source: "PROVIDER",
       providerId: provider.id,
       keyId: picked.id,
+      modelRowId: model.id,
       baseUrl,
       apiKey: plaintext,
       providerType: type,
@@ -301,6 +333,34 @@ export async function markKeyError(keyId: string): Promise<void> {
   await prisma.providerKey
     .update({
       where: { id: keyId },
+      data: {
+        errorCount: { increment: 1 },
+        lastErrorAt: new Date(),
+        totalErrors: { increment: 1 },
+      },
+    })
+    .catch(() => undefined);
+}
+
+// Model-level health tracking (cho pool slug-trùng).
+// Khác markKeyError ở chỗ update bảng Model thay vì ProviderKey.
+export async function markModelSuccess(modelRowId: string): Promise<void> {
+  await prisma.model
+    .update({
+      where: { id: modelRowId },
+      data: {
+        errorCount: 0,
+        lastUsedAt: new Date(),
+        totalRequests: { increment: 1 },
+      },
+    })
+    .catch(() => undefined);
+}
+
+export async function markModelError(modelRowId: string): Promise<void> {
+  await prisma.model
+    .update({
+      where: { id: modelRowId },
       data: {
         errorCount: { increment: 1 },
         lastErrorAt: new Date(),
@@ -469,6 +529,7 @@ export async function callWithFailover(
       // Lỗi key-level → failover
       if (status === 401 || status === 402 || status === 403 || status === 429 || status >= 500) {
         if (u.keyId) await markKeyError(u.keyId);
+        if (u.modelRowId) await markModelError(u.modelRowId);
         lastRes = res;
         lastUsed = u;
         lastStatus = status;
@@ -478,10 +539,12 @@ export async function callWithFailover(
         continue;
       }
       if (u.keyId) await markKeySuccess(u.keyId);
+      if (u.modelRowId) await markModelSuccess(u.modelRowId);
       return { res, used: u };
     } catch (e) {
       // Network error / timeout
       if (u.keyId) await markKeyError(u.keyId);
+      if (u.modelRowId) await markModelError(u.modelRowId);
       lastErr = e;
       lastUsed = u;
       if (u.source === "ENV_FALLBACK") break;

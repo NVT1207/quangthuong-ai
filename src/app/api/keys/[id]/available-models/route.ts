@@ -18,13 +18,15 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const q = url.searchParams.get("q")?.trim() ?? "";
   const category = url.searchParams.get("category")?.trim() ?? "";
 
+  // Slug giờ có thể trùng (pool key). Subscribe 1 row = subscribe cả slug ở phía gateway,
+  // nên available-models phải filter theo slug, không phải modelId.
   const subscribed = await prisma.apiKeyModel.findMany({
     where: { apiKeyId: params.id },
-    select: { modelId: true },
+    select: { model: { select: { slug: true } } },
   });
-  const subscribedIds = subscribed.map((s) => s.modelId);
+  const subscribedSlugs = Array.from(new Set(subscribed.map((s) => s.model.slug)));
 
-  const where: any = { active: true, id: { notIn: subscribedIds } };
+  const where: any = { active: true, slug: { notIn: subscribedSlugs } };
   if (category) where.category = category;
   if (q) {
     where.OR = [
@@ -34,15 +36,22 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     ];
   }
 
-  const items = await prisma.model.findMany({
+  // Dedupe theo slug — chỉ hiện 1 row đại diện cho mỗi slug pool.
+  const rawItems = await prisma.model.findMany({
     where,
     select: {
       id: true, slug: true, displayName: true, provider: true, category: true,
       inputPrice: true, outputPrice: true, priceUnit: true, contextLength: true,
     },
-    orderBy: [{ provider: "asc" }, { displayName: "asc" }],
-    take: 200,
+    orderBy: [{ provider: "asc" }, { displayName: "asc" }, { createdAt: "asc" }],
+    take: 500,
   });
+  const seenSlug = new Set<string>();
+  const items = rawItems.filter((m) => {
+    if (seenSlug.has(m.slug)) return false;
+    seenSlug.add(m.slug);
+    return true;
+  }).slice(0, 200);
 
   return NextResponse.json({ items });
 }

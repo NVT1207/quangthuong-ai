@@ -84,7 +84,10 @@ model ApiKeyModel {
 
 model Model {
   id            String    @id @default(cuid())
-  slug          String    @unique
+  // slug KHÔNG còn unique — cho phép nhiều row cùng slug nhưng khác key/displayName
+  // để pool key (failover/round-robin) trực tiếp ở cấp Model.
+  // resolveUpstream sẽ findMany + pick row healthy nhất (LRU) theo slug.
+  slug          String
   displayName   String
   provider      String // branding string ("openai/anthropic/...") cho logo display
   category      String    @default("text") // text | embedding | image | video | tts
@@ -111,6 +114,7 @@ model Model {
   // === Stats theo key (rolling) ===
   totalRequests Int       @default(0)
   totalErrors   Int       @default(0)
+  errorCount    Int       @default(0) // rolling — reset khi success, dùng cho health check khi pick row trong slug pool
   lastUsedAt    DateTime?
   lastErrorAt   DateTime?
   // === Deprecated: provider relation (giữ nullable cho backward-compat) ===
@@ -130,6 +134,7 @@ model Model {
   apiKeySubs    ApiKeyModel[]
 
   @@index([providerId])
+  @@index([slug, active])
 }
 
 // Upstream provider — admin tạo qua /admin/providers

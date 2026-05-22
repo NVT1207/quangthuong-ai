@@ -51,7 +51,9 @@ export async function loadCallContext(
   if (!modelSlug) return { error: err(400, "Missing 'model'") };
   const [key, model] = await Promise.all([
     authenticate(req),
-    prisma.model.findUnique({ where: { slug: modelSlug } }),
+    // findFirst vì slug không còn unique — pick 1 row đại diện cho pricing/modality.
+    // Pool failover thực hiện trong callWithFailover (resolveUpstream rotate giữa các row trùng slug).
+    prisma.model.findFirst({ where: { slug: modelSlug, active: true }, orderBy: { createdAt: "asc" } }),
   ]);
   if (!key) return { error: err(401, "Invalid API key", "authentication_error") };
   if (key.user.status === "BANNED") return { error: err(403, "Account banned", "permission_error") };
@@ -64,8 +66,9 @@ export async function loadCallContext(
       ),
     };
   }
-  const sub = await prisma.apiKeyModel.findUnique({
-    where: { apiKeyId_modelId: { apiKeyId: key.id, modelId: model.id } },
+  // Subscription check theo slug (gom tất cả row trùng slug) thay vì exact modelId.
+  const sub = await prisma.apiKeyModel.findFirst({
+    where: { apiKeyId: key.id, enabled: true, model: { slug: modelSlug } },
     select: { enabled: true },
   });
   if (!sub || !sub.enabled) {

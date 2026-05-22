@@ -29,8 +29,16 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     orderBy: { createdAt: "asc" },
   });
 
-  // Stats per-model từ UsageLog
-  const slugs = subs.map((s) => s.model.slug);
+  // Dedupe theo slug — slug giờ có thể có nhiều row (pool key), nhưng UI chỉ cần show 1 entry.
+  const seenSlug = new Set<string>();
+  const dedupedSubs = subs.filter((s) => {
+    if (seenSlug.has(s.model.slug)) return false;
+    seenSlug.add(s.model.slug);
+    return true;
+  });
+
+  // Stats per-model từ UsageLog — group theo slug (vì UsageLog chỉ lưu modelSlug).
+  const slugs = dedupedSubs.map((s) => s.model.slug);
   const [stats, successStats] = slugs.length
     ? await Promise.all([
         prisma.usageLog.groupBy({
@@ -50,7 +58,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const statMap = new Map(stats.map((s) => [s.modelSlug, s]));
   const successMap = new Map(successStats.map((s) => [s.modelSlug, s._count._all]));
 
-  const rows = subs.map((s) => {
+  const rows = dedupedSubs.map((s) => {
     const st = statMap.get(s.model.slug);
     return {
       id: s.id,

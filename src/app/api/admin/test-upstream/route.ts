@@ -18,13 +18,22 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get("slug");
-  if (!slug) return NextResponse.json({ error: "Missing ?slug=" }, { status: 400 });
+  const id = searchParams.get("id"); // optional: test row cụ thể trong pool slug-trùng
+  if (!slug && !id) return NextResponse.json({ error: "Missing ?slug= hoặc ?id=" }, { status: 400 });
 
-  const model = await prisma.model.findUnique({ where: { slug } });
+  // Nếu admin truyền ?id= → test exact row đó. Còn ?slug= → tìm row đầu (mới nhất theo createdAt asc).
+  const model = id
+    ? await prisma.model.findUnique({ where: { id } })
+    : await prisma.model.findFirst({ where: { slug: slug! }, orderBy: { createdAt: "asc" } });
   if (!model) return NextResponse.json({ error: "Model not found" }, { status: 404 });
+
+  // Đếm số row trùng slug để admin biết pool có bao nhiêu key
+  const poolCount = await prisma.model.count({ where: { slug: model.slug } });
 
   const info: any = {
     slug: model.slug,
+    modelRowId: model.id,
+    poolCount, // số row trùng slug — admin biết slug có bao nhiêu key
     apiType: model.apiType,
     apiBaseUrl: model.apiBaseUrl,
     upstreamSlug: model.upstreamSlug,

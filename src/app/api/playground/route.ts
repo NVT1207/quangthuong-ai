@@ -16,7 +16,8 @@ export async function POST(req: Request) {
 
   const [user, m, key] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.user.id } }),
-    prisma.model.findUnique({ where: { slug: model } }),
+    // findFirst vì slug không còn unique — pick row đại diện cho pricing.
+    prisma.model.findFirst({ where: { slug: model, active: true }, orderBy: { createdAt: "asc" } }),
     prisma.apiKey.findFirst({ where: { userId: session.user.id, revokedAt: null }, orderBy: { createdAt: "desc" } }),
   ]);
   if (!m || !m.active) return NextResponse.json({ error: "Model không tồn tại hoặc đang tắt" }, { status: 404 });

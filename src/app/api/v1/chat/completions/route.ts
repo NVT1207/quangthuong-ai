@@ -77,7 +77,9 @@ export async function POST(req: Request) {
 
   const [key, model] = await Promise.all([
     authenticate(req),
-    prisma.model.findUnique({ where: { slug: modelSlug } }),
+    // findFirst vì slug không còn unique — nhiều row cùng slug = pool key.
+    // Lấy 1 row đại diện cho pricing/modality (giả định các row trùng slug có cùng pricing/modality).
+    prisma.model.findFirst({ where: { slug: modelSlug, active: true }, orderBy: { createdAt: "asc" } }),
   ]);
   if (!key) return err(401, "Invalid API key", "authentication_error");
   if (key.user.status === "BANNED") return err(403, "Account banned", "permission_error");
@@ -99,8 +101,10 @@ export async function POST(req: Request) {
   }
 
   // Key phải subscribe model này (mỗi key tự chọn model trong /api-keys → Xem chi tiết → Models)
-  const sub = await prisma.apiKeyModel.findUnique({
-    where: { apiKeyId_modelId: { apiKeyId: key.id, modelId: model.id } },
+  // Dùng findFirst theo slug (qua join) thay vì exact modelId — vì slug có thể có nhiều row pool,
+  // user subscribe 1 row là coi như subscribe cả slug.
+  const sub = await prisma.apiKeyModel.findFirst({
+    where: { apiKeyId: key.id, enabled: true, model: { slug: modelSlug } },
     select: { enabled: true },
   });
   if (!sub || !sub.enabled) {

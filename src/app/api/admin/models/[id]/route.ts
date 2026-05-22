@@ -112,7 +112,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const m = await prisma.model.update({ where: { id: params.id }, data });
     return NextResponse.json(m);
   } catch (e: any) {
-    if (e.code === "P2002") return NextResponse.json({ error: "Slug đã tồn tại" }, { status: 409 });
+    // Slug giờ KHÔNG còn unique — cho phép trùng. P2002 chỉ còn cho unique khác.
+    if (e.code === "P2002") return NextResponse.json({ error: `Trùng giá trị unique: ${e.meta?.target?.join?.(",") ?? "unknown"}` }, { status: 409 });
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }

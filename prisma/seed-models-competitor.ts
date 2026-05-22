@@ -344,7 +344,9 @@ async function main() {
   let created = 0;
   let updated = 0;
   for (const m of CATALOG) {
-    const existing = await prisma.model.findUnique({ where: { slug: m.slug } });
+    // Slug giờ KHÔNG còn unique → không thể upsert theo slug. Dùng findFirst + create/update.
+    // Seed này coi slug như identifier "đại diện": nếu đã có row trùng slug thì update row cũ nhất, không tạo mới.
+    const existing = await prisma.model.findFirst({ where: { slug: m.slug }, orderBy: { createdAt: "asc" } });
     const data = {
       slug: m.slug,
       displayName: m.displayName,
@@ -363,13 +365,13 @@ async function main() {
       advDiscount: m.advDiscount,
       active: true,
     };
-    await prisma.model.upsert({
-      where: { slug: m.slug },
-      update: data,
-      create: data,
-    });
-    if (existing) updated++;
-    else created++;
+    if (existing) {
+      await prisma.model.update({ where: { id: existing.id }, data });
+      updated++;
+    } else {
+      await prisma.model.create({ data });
+      created++;
+    }
   }
   console.log(`Done. ${created} created, ${updated} updated. Total in catalog: ${CATALOG.length}`);
   const total = await prisma.model.count();
