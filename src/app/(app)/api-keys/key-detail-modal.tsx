@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import {
-  X, Link2, Combine, Rocket, Settings2, Zap, History, Sparkles, Bot, Terminal as TerminalIcon,
-  Plus, BarChart3, Plug,
+  X, Link2, Combine, Rocket, CreditCard, Zap, History, Sparkles, Bot, Plus,
 } from "lucide-react";
 import { formatUSD, formatNumber, formatDateTime } from "@/lib/format";
 import { ClaudeSetupCard, OpenclawSetupCard, type KeyItem, type ModelOpt } from "./cli-panels";
 import { ModelsTab } from "./models-tab";
-import { ThirdPartySetupCard } from "./third-party-setup";
+import { ComboTab } from "./combo-tab";
+import { QuickStartTab } from "./quickstart-tab";
+import { SubscriptionTab } from "./subscription-tab";
+import { TestApiTab } from "./testapi-tab";
 
 type Detail = {
   key: { id: string; name: string; prefix: string; suffix: string; enabled: boolean; createdAt: string; lastUsedAt: string | null };
@@ -26,7 +28,7 @@ type Props = {
   revealed?: Record<string, string>;
 };
 
-type TabKey = "models" | "stats" | "history" | "claude" | "openclaw" | "thirdparty";
+type TabKey = "models" | "combo" | "quickstart" | "subscription" | "testapi" | "history" | "claude" | "openclaw";
 
 export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revealed }: Props) {
   const [tab, setTab] = useState<TabKey>("models");
@@ -48,8 +50,6 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  const maxCost = data ? Math.max(...data.chart.map((c) => c.cost), 1) : 1;
 
   return (
     <div
@@ -101,8 +101,17 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
             <TabPill active={tab === "models"} onClick={() => setTab("models")} icon={<Link2 size={13} />}>
               Models{modelCount !== null && ` (${modelCount})`}
             </TabPill>
-            <TabPill active={tab === "stats"} onClick={() => setTab("stats")} icon={<BarChart3 size={13} />}>
-              Thống kê
+            <TabPill active={tab === "combo"} onClick={() => setTab("combo")} icon={<Combine size={13} className="text-sky-300" />}>
+              Combo
+            </TabPill>
+            <TabPill active={tab === "quickstart"} onClick={() => setTab("quickstart")} icon={<Rocket size={13} className="text-violet-300" />}>
+              Quick Start
+            </TabPill>
+            <TabPill active={tab === "subscription"} onClick={() => setTab("subscription")} icon={<CreditCard size={13} className="text-honey-300" />}>
+              Subscription
+            </TabPill>
+            <TabPill active={tab === "testapi"} onClick={() => setTab("testapi")} icon={<Zap size={13} className="text-amber-300" />}>
+              Test API
             </TabPill>
             <TabPill active={tab === "history"} onClick={() => setTab("history")} icon={<History size={13} />}>
               Lịch sử
@@ -112,9 +121,6 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
             </TabPill>
             <TabPill active={tab === "openclaw"} onClick={() => setTab("openclaw")} icon={<Bot size={13} className="text-rose-300" />}>
               OpenClaw
-            </TabPill>
-            <TabPill active={tab === "thirdparty"} onClick={() => setTab("thirdparty")} icon={<Plug size={13} className="text-sky-300" />}>
-              Kết nối khác
             </TabPill>
           </div>
         </div>
@@ -129,6 +135,22 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
             />
           )}
 
+          {tab === "combo" && (
+            <ComboTab keyId={keyId} />
+          )}
+
+          {tab === "quickstart" && (
+            <QuickStartTab keyItem={keyItem} models={models} baseUrl={baseUrl} revealed={revealed} />
+          )}
+
+          {tab === "subscription" && (
+            <SubscriptionTab />
+          )}
+
+          {tab === "testapi" && (
+            <TestApiTab models={models} />
+          )}
+
           {tab === "claude" && (
             <ClaudeSetupCard keys={[keyItem]} models={models} baseUrl={baseUrl} revealed={revealed} />
           )}
@@ -137,63 +159,8 @@ export function KeyDetailModal({ keyId, onClose, baseUrl, models, keyItem, revea
             <OpenclawSetupCard keys={[keyItem]} models={models} baseUrl={baseUrl} revealed={revealed} />
           )}
 
-          {tab === "thirdparty" && (
-            <ThirdPartySetupCard keyItem={keyItem} models={models} baseUrl={baseUrl} revealed={revealed} />
-          )}
-
-          {(tab === "stats" || tab === "history") && (loading || !data) && (
+          {tab === "history" && (loading || !data) && (
             <div className="py-12 text-center text-ink-200/50 text-sm">Đang tải dữ liệu...</div>
-          )}
-
-          {tab === "stats" && !loading && data && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <StatPill label="Tổng requests" value={formatNumber(data.stats.totalRequests)} />
-                <StatPill label="Tổng chi" value={formatUSD(data.stats.totalCost)} accent="emerald" />
-                <StatPill label="Tokens" value={formatNumber(data.stats.totalInputTokens + data.stats.totalOutputTokens)} />
-                <StatPill label="Lần dùng cuối" value={data.key.lastUsedAt ? formatDateTime(data.key.lastUsedAt) : "Chưa dùng"} small />
-              </div>
-
-              <Section title="Chi phí 7 ngày gần nhất">
-                <div className="h-32 flex items-end gap-2">
-                  {data.chart.map((c) => {
-                    const h = Math.max(4, (c.cost / maxCost) * 100);
-                    return (
-                      <div key={c.date} className="flex-1 flex flex-col items-center gap-1.5" title={`${c.date}: ${formatUSD(c.cost)} · ${c.count} req`}>
-                        <div className="w-full flex-1 flex items-end">
-                          <div
-                            className={`w-full rounded-t ${c.cost > 0 ? "bg-gradient-to-t from-sky-500/70 to-violet-500/70" : "bg-white/5"}`}
-                            style={{ height: `${h}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-mono text-ink-200/40">{c.date.slice(5)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Section>
-
-              <Section title="Top model sử dụng">
-                {data.topModels.length === 0 ? (
-                  <p className="text-sm text-ink-200/40 italic">Chưa có request nào.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {data.topModels.map((m) => (
-                      <div key={m.slug} className="flex items-center justify-between text-sm py-2 px-3 rounded-lg bg-ink-950/40 border border-white/5">
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{m.displayName}</p>
-                          <p className="text-[11px] font-mono text-ink-200/40 truncate">{m.slug}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-mono text-sm">{formatNumber(m.count)} req</p>
-                          <p className="text-[11px] font-mono text-emerald-300/80">{formatUSD(m.cost)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Section>
-            </div>
           )}
 
           {tab === "history" && !loading && data && (
@@ -252,15 +219,6 @@ function TabPill({ active, onClick, icon, children }: { active: boolean; onClick
     >
       {icon} {children}
     </button>
-  );
-}
-
-function StatPill({ label, value, accent, small }: { label: string; value: string; accent?: "emerald"; small?: boolean }) {
-  return (
-    <div className="rounded-xl border border-white/5 bg-ink-950/40 px-4 py-3">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-ink-200/50">{label}</p>
-      <p className={`mt-1 font-semibold ${accent === "emerald" ? "text-emerald-400" : "text-ink-100"} ${small ? "text-sm" : "text-lg"}`}>{value}</p>
-    </div>
   );
 }
 

@@ -9,6 +9,8 @@ import {
   TIER_LABEL,
   TIER_RANK,
   syncUserTier,
+  resolveTier,
+  topup30dTotal,
   type PaidPlan,
   type Period,
   type Tier,
@@ -16,6 +18,27 @@ import {
 
 const PLANS: PaidPlan[] = ["BASIC", "ADV"];
 const PERIODS: Period[] = ["MONTH", "HALF_YEAR", "YEAR"];
+
+// GET /api/subscriptions — trạng thái gói hiện tại của user (cho tab Subscription trong modal key detail).
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const [user, r, topup30d] = await Promise.all([
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { balance: true } }),
+    resolveTier(session.user.id),
+    topup30dTotal(session.user.id),
+  ]);
+  return NextResponse.json({
+    balance: user?.balance ?? 0,
+    tier: r.tier,
+    tierSource: r.source,
+    autoTier: r.auto,
+    tierExpiresAt: r.paidExpires,
+    topup30d,
+  });
+}
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
