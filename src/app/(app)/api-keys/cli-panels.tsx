@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Copy, Check, Terminal, Bot, Zap, Bell, AlertTriangle, GitBranch, Trash2, CheckCircle2 } from "lucide-react";
+import { ChevronDown, Copy, Check, Terminal, Bot, Zap, Bell, AlertTriangle, GitBranch, Trash2, CheckCircle2, Loader2 } from "lucide-react";
 import {
   CLAUDE_INSTALL,
   OPENCLAW_INSTALL,
@@ -60,28 +60,54 @@ function Card({ title, subtitle, icon, children }: { title: string; subtitle: st
   );
 }
 
-function ClaudeSetup({ keys, models, baseUrl, revealed }: Props) {
+// Lấy danh sách model ĐÃ THÊM vào key này (subscribe) — dùng cho dropdown mapping.
+function useKeyModels(keyId: string): { models: ModelOpt[]; loading: boolean } {
+  const [models, setModels] = useState<ModelOpt[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!keyId) { setModels([]); setLoading(false); return; }
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/keys/${keyId}/models`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        const items: ModelOpt[] = (d.items ?? [])
+          .filter((it: any) => it?.model)
+          .map((it: any) => ({ slug: it.model.slug, displayName: it.model.displayName, provider: it.model.provider }));
+        setModels(items);
+      })
+      .catch(() => { if (alive) setModels([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [keyId]);
+  return { models, loading };
+}
+
+function ClaudeSetup({ keys, baseUrl, revealed }: Props) {
+  // Modal luôn truyền đúng 1 key (đang xem chi tiết) → không cần chọn key nữa.
+  const keyItem = keys[0];
+  const keyId = keyItem?.id ?? "";
+  const { models: keyModels, loading: loadingModels } = useKeyModels(keyId);
+
   const [os, setOs] = useState<OsTarget>("unix");
-  const [keyId, setKeyId] = useState<string>(keys[0]?.id ?? "");
   const [haiku, setHaiku] = useState("");
   const [sonnet, setSonnet] = useState("");
   const [opus, setOpus] = useState("");
   const [revealedKey, setRevealedKey] = useState("");
-  const [showFull, setShowFull] = useState(false);
   const [shown, setShown] = useState(false);
 
-  const selectedKey = keys.find((k) => k.id === keyId);
   // Ưu tiên: (1) key user paste tay, (2) key đã reveal ở list. Fallback prefix...suffix chỉ để hiển thị.
   const autoFullKey = revealed?.[keyId] ?? "";
   const effectiveKey = revealedKey || autoFullKey;
-  const keyDisplay = effectiveKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
+  const keyDisplay = effectiveKey || (keyItem ? `${keyItem.prefix}...${keyItem.suffix}` : "");
   // Claude Code BẮT BUỘC key đầy đủ — nếu không, script sẽ ghi `sk-bee-...XXXX` vào
   // ~/.claude/settings.json và mọi request đều 401.
   const hasFullKey = effectiveKey.startsWith("sk-bee-") && !effectiveKey.includes("...");
-  const ready = Boolean(haiku && sonnet && opus && selectedKey && hasFullKey);
+  const ready = Boolean(haiku && sonnet && opus && keyItem && hasFullKey);
 
   // hide command output when any input changes — force re-click
-  useEffect(() => { setShown(false); }, [os, keyId, revealedKey, haiku, sonnet, opus]);
+  useEffect(() => { setShown(false); }, [os, revealedKey, haiku, sonnet, opus]);
 
   const cmd = useMemo(() => {
     if (!ready) return "";
@@ -107,13 +133,13 @@ function ClaudeSetup({ keys, models, baseUrl, revealed }: Props) {
         <Label className="mt-4 flex items-center gap-1.5">
           <GitBranch size={12} /> MAPPING MODEL CHO CLAUDE CODE
         </Label>
-        <SelectRow label="Haiku (Fast)" value={haiku} onChange={setHaiku} models={models} />
-        <SelectRow label="Sonnet (Default)" value={sonnet} onChange={setSonnet} models={models} />
-        <SelectRow label="Opus (Powerful)" value={opus} onChange={setOpus} models={models} />
+        <ModelMapping loading={loadingModels} models={keyModels}>
+          <SelectRow label="Haiku (Fast)" value={haiku} onChange={setHaiku} models={keyModels} />
+          <SelectRow label="Sonnet (Default)" value={sonnet} onChange={setSonnet} models={keyModels} />
+          <SelectRow label="Opus (Powerful)" value={opus} onChange={setOpus} models={keyModels} />
+        </ModelMapping>
 
-        <Label className="mt-4">API KEY</Label>
-        <KeySelect keys={keys} keyId={keyId} setKeyId={setKeyId} />
-        <RevealKeyRow keyId={keyId} revealedKey={revealedKey} setRevealedKey={setRevealedKey} showFull={showFull} setShowFull={setShowFull} />
+        <FullKeyField hasFullKey={hasFullKey} setRevealedKey={setRevealedKey} target="settings.json" />
 
         <GenerateBlock
           ready={ready}
@@ -121,11 +147,13 @@ function ClaudeSetup({ keys, models, baseUrl, revealed }: Props) {
           onClick={() => setShown(true)}
           cmd={cmd}
           warningWhenNotReady={
-            !haiku || !sonnet || !opus
-              ? "Chọn đầy đủ Haiku / Sonnet / Opus"
-              : !hasFullKey
-                ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào settings.json"
-                : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+            keyModels.length === 0
+              ? "Key này chưa thêm model nào — vào tab Models để thêm trước"
+              : !haiku || !sonnet || !opus
+                ? "Chọn đầy đủ Haiku / Sonnet / Opus"
+                : !hasFullKey
+                  ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào settings.json"
+                  : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
           }
           finalCommand="claude"
         />
@@ -142,28 +170,30 @@ function ClaudeSetup({ keys, models, baseUrl, revealed }: Props) {
   );
 }
 
-function OpenclawSetup({ keys, models, baseUrl, revealed }: Props) {
+function OpenclawSetup({ keys, baseUrl, revealed }: Props) {
+  // Modal luôn truyền đúng 1 key (đang xem chi tiết) → không cần chọn key nữa.
+  const keyItem = keys[0];
+  const keyId = keyItem?.id ?? "";
+  const { models: keyModels, loading: loadingModels } = useKeyModels(keyId);
+
   const [os, setOs] = useState<OsTarget>("unix");
-  const [keyId, setKeyId] = useState<string>(keys[0]?.id ?? "");
   const [small, setSmall] = useState("");
   const [medium, setMedium] = useState("");
   const [high, setHigh] = useState("");
   const [botToken, setBotToken] = useState("");
   const [userId, setUserId] = useState("");
   const [revealedKey, setRevealedKey] = useState("");
-  const [showFull, setShowFull] = useState(false);
   const [shown, setShown] = useState(false);
 
-  const selectedKey = keys.find((k) => k.id === keyId);
   const autoFullKey = revealed?.[keyId] ?? "";
   const effectiveKey = revealedKey || autoFullKey;
-  const keyDisplay = effectiveKey || (selectedKey ? `${selectedKey.prefix}...${selectedKey.suffix}` : "");
+  const keyDisplay = effectiveKey || (keyItem ? `${keyItem.prefix}...${keyItem.suffix}` : "");
   // OpenClaw cũng BẮT BUỘC key đầy đủ — script ghi vào ~/.openclaw/openclaw.json,
   // nếu là dạng "sk-bee-XXXX...YYYY" thì mọi request đều 401.
   const hasFullKey = effectiveKey.startsWith("sk-bee-") && !effectiveKey.includes("...");
-  const ready = Boolean(small && medium && high && selectedKey && hasFullKey);
+  const ready = Boolean(small && medium && high && keyItem && hasFullKey);
 
-  useEffect(() => { setShown(false); }, [os, keyId, revealedKey, small, medium, high, botToken, userId]);
+  useEffect(() => { setShown(false); }, [os, revealedKey, small, medium, high, botToken, userId]);
 
   const cmd = useMemo(() => {
     if (!ready) return "";
@@ -192,9 +222,11 @@ function OpenclawSetup({ keys, models, baseUrl, revealed }: Props) {
         <Label className="mt-4 flex items-center gap-1.5">
           <GitBranch size={12} /> MAPPING MODEL CHO OPENCLAW
         </Label>
-        <SelectRow label="Small (Fast)" value={small} onChange={setSmall} models={models} />
-        <SelectRow label="Medium (Default)" value={medium} onChange={setMedium} models={models} />
-        <SelectRow label="High (Powerful)" value={high} onChange={setHigh} models={models} />
+        <ModelMapping loading={loadingModels} models={keyModels}>
+          <SelectRow label="Small (Fast)" value={small} onChange={setSmall} models={keyModels} />
+          <SelectRow label="Medium (Default)" value={medium} onChange={setMedium} models={keyModels} />
+          <SelectRow label="High (Powerful)" value={high} onChange={setHigh} models={keyModels} />
+        </ModelMapping>
 
         <div className="mt-4 flex items-center justify-between">
           <Label>TELEGRAM BOT TOKEN</Label>
@@ -218,9 +250,7 @@ function OpenclawSetup({ keys, models, baseUrl, revealed }: Props) {
           placeholder="123456789 (tuỳ chọn)"
         />
 
-        <Label className="mt-4">API KEY</Label>
-        <KeySelect keys={keys} keyId={keyId} setKeyId={setKeyId} />
-        <RevealKeyRow keyId={keyId} revealedKey={revealedKey} setRevealedKey={setRevealedKey} showFull={showFull} setShowFull={setShowFull} />
+        <FullKeyField hasFullKey={hasFullKey} setRevealedKey={setRevealedKey} target="openclaw.json" />
 
         <GenerateBlock
           ready={ready}
@@ -228,11 +258,13 @@ function OpenclawSetup({ keys, models, baseUrl, revealed }: Props) {
           onClick={() => setShown(true)}
           cmd={cmd}
           warningWhenNotReady={
-            !small || !medium || !high
-              ? "Chọn đầy đủ Small / Medium / High"
-              : !hasFullKey
-                ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào openclaw.json"
-                : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+            keyModels.length === 0
+              ? "Key này chưa thêm model nào — vào tab Models để thêm trước"
+              : !small || !medium || !high
+                ? "Chọn đầy đủ Small / Medium / High"
+                : !hasFullKey
+                  ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào openclaw.json"
+                  : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
           }
           finalCommand="openclaw start"
         />
@@ -322,39 +354,49 @@ function SelectRow({ label, value, onChange, models }: { label: string; value: s
   );
 }
 
-function KeySelect({ keys, keyId, setKeyId }: { keys: KeyItem[]; keyId: string; setKeyId: (v: string) => void }) {
-  if (keys.length === 0) {
-    return <div className="input text-sm text-ink-200/50 italic">Chưa có API key — tạo 1 key ở trên trước</div>;
+// Bọc các dropdown mapping model. Hiển thị loading / cảnh báo nếu key chưa thêm
+// model nào — chỉ render dropdown khi đã có ≥1 model đăng ký cho key này.
+function ModelMapping({ loading, models, children }: { loading: boolean; models: ModelOpt[]; children: React.ReactNode }) {
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-ink-200/55 py-3">
+        <Loader2 size={13} className="animate-spin" /> Đang tải model của key...
+      </div>
+    );
   }
-  return (
-    <select value={keyId} onChange={(e) => setKeyId(e.target.value)} className="input w-full text-sm">
-      {keys.map((k) => (
-        <option key={k.id} value={k.id}>{k.name} ({k.prefix}...{k.suffix})</option>
-      ))}
-    </select>
-  );
+  if (models.length === 0) {
+    return (
+      <div className="rounded-xl border border-honey-500/30 bg-honey-500/5 px-4 py-3 flex items-start gap-2 text-xs text-ink-100/85">
+        <AlertTriangle size={13} className="text-honey-400 mt-0.5 shrink-0" />
+        <span>Key này chưa thêm model nào. Mở tab <b>Models</b> ở trên và thêm model, rồi quay lại đây để tạo lệnh.</span>
+      </div>
+    );
+  }
+  return <>{children}</>;
 }
 
-function RevealKeyRow({ keyId, revealedKey, setRevealedKey, showFull, setShowFull }: {
-  keyId: string; revealedKey: string; setRevealedKey: (v: string) => void; showFull: boolean; setShowFull: (v: boolean) => void;
-}) {
-  if (!keyId) return null;
+// Trường key đầy đủ. Key đầy đủ là BẮT BUỘC vì script ghi thẳng vào file cấu hình
+// ({target}); nếu chỉ có dạng rút gọn thì mọi request đều 401.
+function FullKeyField({ hasFullKey, setRevealedKey, target }: { hasFullKey: boolean; setRevealedKey: (v: string) => void; target: string }) {
+  if (hasFullKey) {
+    return (
+      <div className="mt-4 flex items-center gap-1.5 text-[11px] text-emerald-300">
+        <CheckCircle2 size={12} className="shrink-0" /> Đã có API key đầy đủ — lệnh sẽ hoạt động ngay.
+      </div>
+    );
+  }
   return (
-    <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-200/55 flex-wrap">
-      {revealedKey ? (
-        <span className="text-emerald-300">Đã dán key đầy đủ — lệnh sẽ hoạt động ngay.</span>
-      ) : (
-        <>
-          <AlertTriangle size={11} className="text-honey-400" />
-          <span>Lệnh dưới đây dùng key rút gọn. Dán key đầy đủ bạn đã lưu để lệnh chạy được:</span>
-          <button type="button" onClick={() => setShowFull(!showFull)} className="text-sky-300 hover:underline">
-            {showFull ? "Đóng" : "Dán key đầy đủ"}
-          </button>
-        </>
-      )}
-      {showFull && !revealedKey && (
-        <input autoFocus placeholder="sk-bee-..." onChange={(e) => setRevealedKey(e.target.value)} className="input text-xs font-mono w-full mt-1" />
-      )}
+    <div className="mt-4">
+      <Label>DÁN API KEY ĐẦY ĐỦ</Label>
+      <div className="flex items-start gap-1.5 text-[11px] text-honey-300 mb-1.5">
+        <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+        <span>Bắt buộc — script sẽ ghi key này vào <code className="font-mono">{target}</code>. Key rút gọn (sk-bee-...XXXX) sẽ khiến mọi request 401.</span>
+      </div>
+      <input
+        placeholder="sk-bee-..."
+        onChange={(e) => setRevealedKey(e.target.value.trim())}
+        className="input text-xs font-mono w-full"
+      />
     </div>
   );
 }
