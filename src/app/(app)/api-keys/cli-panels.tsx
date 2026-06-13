@@ -84,30 +84,55 @@ function useKeyModels(keyId: string): { models: ModelOpt[]; loading: boolean } {
   return { models, loading };
 }
 
+// Tự lấy full key của key đang xem chi tiết: ưu tiên revealed[] sẵn có, nếu chưa thì
+// gọi /reveal. User không cần dán key tay nữa vì đã ở trong chi tiết của chính key đó.
+function useFullKey(keyId: string, revealed?: Record<string, string>): { fullKey: string; loading: boolean; error: string } {
+  const preset = revealed?.[keyId] ?? "";
+  const presetOk = preset.startsWith("sk-bee-") && !preset.includes("...");
+  const [fullKey, setFullKey] = useState(presetOk ? preset : "");
+  const [loading, setLoading] = useState(!presetOk);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (presetOk) { setFullKey(preset); setLoading(false); setError(""); return; }
+    if (!keyId) { setFullKey(""); setLoading(false); setError(""); return; }
+    let alive = true;
+    setLoading(true); setError("");
+    fetch(`/api/keys/${keyId}/reveal`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!alive) return;
+        if (r.ok && typeof d.fullKey === "string") setFullKey(d.fullKey);
+        else setError(d.error || `Không lấy được key (lỗi ${r.status})`);
+      })
+      .catch(() => { if (alive) setError("Lỗi mạng khi lấy key"); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [keyId, preset, presetOk]);
+  return { fullKey, loading, error };
+}
+
 function ClaudeSetup({ keys, baseUrl, revealed }: Props) {
   // Modal luôn truyền đúng 1 key (đang xem chi tiết) → không cần chọn key nữa.
   const keyItem = keys[0];
   const keyId = keyItem?.id ?? "";
   const { models: keyModels, loading: loadingModels } = useKeyModels(keyId);
+  // Tự lấy full key — user không phải dán nữa.
+  const { fullKey, loading: loadingKey, error: keyError } = useFullKey(keyId, revealed);
 
   const [os, setOs] = useState<OsTarget>("unix");
   const [haiku, setHaiku] = useState("");
   const [sonnet, setSonnet] = useState("");
   const [opus, setOpus] = useState("");
-  const [revealedKey, setRevealedKey] = useState("");
   const [shown, setShown] = useState(false);
 
-  // Ưu tiên: (1) key user paste tay, (2) key đã reveal ở list. Fallback prefix...suffix chỉ để hiển thị.
-  const autoFullKey = revealed?.[keyId] ?? "";
-  const effectiveKey = revealedKey || autoFullKey;
-  const keyDisplay = effectiveKey || (keyItem ? `${keyItem.prefix}...${keyItem.suffix}` : "");
+  const keyDisplay = fullKey || (keyItem ? `${keyItem.prefix}...${keyItem.suffix}` : "");
   // Claude Code BẮT BUỘC key đầy đủ — nếu không, script sẽ ghi `sk-bee-...XXXX` vào
   // ~/.claude/settings.json và mọi request đều 401.
-  const hasFullKey = effectiveKey.startsWith("sk-bee-") && !effectiveKey.includes("...");
+  const hasFullKey = fullKey.startsWith("sk-bee-") && !fullKey.includes("...");
   const ready = Boolean(haiku && sonnet && opus && keyItem && hasFullKey);
 
   // hide command output when any input changes — force re-click
-  useEffect(() => { setShown(false); }, [os, revealedKey, haiku, sonnet, opus]);
+  useEffect(() => { setShown(false); }, [os, haiku, sonnet, opus, fullKey]);
 
   const cmd = useMemo(() => {
     if (!ready) return "";
@@ -139,7 +164,7 @@ function ClaudeSetup({ keys, baseUrl, revealed }: Props) {
           <SelectRow label="Opus (Powerful)" value={opus} onChange={setOpus} models={keyModels} />
         </ModelMapping>
 
-        <FullKeyField hasFullKey={hasFullKey} setRevealedKey={setRevealedKey} target="settings.json" />
+        <KeyErrorNotice error={keyError} />
 
         <GenerateBlock
           ready={ready}
@@ -151,9 +176,11 @@ function ClaudeSetup({ keys, baseUrl, revealed }: Props) {
               ? "Key này chưa thêm model nào — vào tab Models để thêm trước"
               : !haiku || !sonnet || !opus
                 ? "Chọn đầy đủ Haiku / Sonnet / Opus"
-                : !hasFullKey
-                  ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào settings.json"
-                  : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+                : loadingKey
+                  ? "Đang lấy API key của bạn..."
+                  : !hasFullKey
+                    ? (keyError || "Không lấy được API key đầy đủ")
+                    : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
           }
           finalCommand="claude"
         />
@@ -175,6 +202,8 @@ function OpenclawSetup({ keys, baseUrl, revealed }: Props) {
   const keyItem = keys[0];
   const keyId = keyItem?.id ?? "";
   const { models: keyModels, loading: loadingModels } = useKeyModels(keyId);
+  // Tự lấy full key — user không phải dán nữa.
+  const { fullKey, loading: loadingKey, error: keyError } = useFullKey(keyId, revealed);
 
   const [os, setOs] = useState<OsTarget>("unix");
   const [small, setSmall] = useState("");
@@ -182,18 +211,15 @@ function OpenclawSetup({ keys, baseUrl, revealed }: Props) {
   const [high, setHigh] = useState("");
   const [botToken, setBotToken] = useState("");
   const [userId, setUserId] = useState("");
-  const [revealedKey, setRevealedKey] = useState("");
   const [shown, setShown] = useState(false);
 
-  const autoFullKey = revealed?.[keyId] ?? "";
-  const effectiveKey = revealedKey || autoFullKey;
-  const keyDisplay = effectiveKey || (keyItem ? `${keyItem.prefix}...${keyItem.suffix}` : "");
+  const keyDisplay = fullKey || (keyItem ? `${keyItem.prefix}...${keyItem.suffix}` : "");
   // OpenClaw cũng BẮT BUỘC key đầy đủ — script ghi vào ~/.openclaw/openclaw.json,
   // nếu là dạng "sk-bee-XXXX...YYYY" thì mọi request đều 401.
-  const hasFullKey = effectiveKey.startsWith("sk-bee-") && !effectiveKey.includes("...");
+  const hasFullKey = fullKey.startsWith("sk-bee-") && !fullKey.includes("...");
   const ready = Boolean(small && medium && high && keyItem && hasFullKey);
 
-  useEffect(() => { setShown(false); }, [os, revealedKey, small, medium, high, botToken, userId]);
+  useEffect(() => { setShown(false); }, [os, small, medium, high, botToken, userId, fullKey]);
 
   const cmd = useMemo(() => {
     if (!ready) return "";
@@ -250,7 +276,7 @@ function OpenclawSetup({ keys, baseUrl, revealed }: Props) {
           placeholder="123456789 (tuỳ chọn)"
         />
 
-        <FullKeyField hasFullKey={hasFullKey} setRevealedKey={setRevealedKey} target="openclaw.json" />
+        <KeyErrorNotice error={keyError} />
 
         <GenerateBlock
           ready={ready}
@@ -262,9 +288,11 @@ function OpenclawSetup({ keys, baseUrl, revealed }: Props) {
               ? "Key này chưa thêm model nào — vào tab Models để thêm trước"
               : !small || !medium || !high
                 ? "Chọn đầy đủ Small / Medium / High"
-                : !hasFullKey
-                  ? "Bắt buộc dán key ĐẦY ĐỦ (sk-bee-...) — script sẽ ghi vào openclaw.json"
-                  : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
+                : loadingKey
+                  ? "Đang lấy API key của bạn..."
+                  : !hasFullKey
+                    ? (keyError || "Không lấy được API key đầy đủ")
+                    : "Vui lòng chọn đầy đủ cả 3 model để tạo lệnh cài đặt"
           }
           finalCommand="openclaw start"
         />
@@ -375,28 +403,14 @@ function ModelMapping({ loading, models, children }: { loading: boolean; models:
   return <>{children}</>;
 }
 
-// Trường key đầy đủ. Key đầy đủ là BẮT BUỘC vì script ghi thẳng vào file cấu hình
-// ({target}); nếu chỉ có dạng rút gọn thì mọi request đều 401.
-function FullKeyField({ hasFullKey, setRevealedKey, target }: { hasFullKey: boolean; setRevealedKey: (v: string) => void; target: string }) {
-  if (hasFullKey) {
-    return (
-      <div className="mt-4 flex items-center gap-1.5 text-[11px] text-emerald-300">
-        <CheckCircle2 size={12} className="shrink-0" /> Đã có API key đầy đủ — lệnh sẽ hoạt động ngay.
-      </div>
-    );
-  }
+// Chỉ hiện khi KHÔNG tự lấy được full key (vd key tạo trước khi bật mã hoá, hoặc
+// server thiếu KEY_ENCRYPTION_KEY). Trường hợp bình thường: không hiện gì.
+function KeyErrorNotice({ error }: { error: string }) {
+  if (!error) return null;
   return (
-    <div className="mt-4">
-      <Label>DÁN API KEY ĐẦY ĐỦ</Label>
-      <div className="flex items-start gap-1.5 text-[11px] text-honey-300 mb-1.5">
-        <AlertTriangle size={11} className="mt-0.5 shrink-0" />
-        <span>Bắt buộc — script sẽ ghi key này vào <code className="font-mono">{target}</code>. Key rút gọn (sk-bee-...XXXX) sẽ khiến mọi request 401.</span>
-      </div>
-      <input
-        placeholder="sk-bee-..."
-        onChange={(e) => setRevealedKey(e.target.value.trim())}
-        className="input text-xs font-mono w-full"
-      />
+    <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-200 flex items-start gap-2">
+      <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+      <span>Không tự lấy được API key đầy đủ: {error} — bấm 👁 ở danh sách key bên ngoài để hiện key rồi mở lại.</span>
     </div>
   );
 }
