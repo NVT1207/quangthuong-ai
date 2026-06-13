@@ -64,6 +64,38 @@ model ApiKey {
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   usage        UsageLog[]
   models       ApiKeyModel[]
+  combos       KeyCombo[]
+}
+
+// Combo định tuyến — alias gọi như 1 "model" nhưng auto-failover qua N member.
+// Client gọi body.model = combo.name → gateway thử lần lượt member theo strategy.
+// Tên combo ưu tiên hơn model slug khi trùng tên (check combo trước).
+model KeyCombo {
+  id        String           @id @default(cuid())
+  apiKeyId  String
+  name      String // alias gọi như model slug (1-64 ký tự, chữ/số/./_/-)
+  strategy  String           @default("FAILOVER") // FAILOVER | ROUND_ROBIN | CHEAPEST
+  enabled   Boolean          @default(true)
+  rrCursor  Int              @default(0) // con trỏ xoay vòng cho ROUND_ROBIN
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  apiKey    ApiKey           @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  members   KeyComboMember[]
+
+  @@unique([apiKeyId, name])
+  @@index([apiKeyId])
+}
+
+// Thành viên combo — trỏ tới 1 model slug mà key đã subscribe. 1-20 member/combo.
+model KeyComboMember {
+  id        String   @id @default(cuid())
+  comboId   String
+  order     Int      @default(0)
+  modelSlug String // slug model đã subscribe (match ApiKeyModel.model.slug)
+  createdAt DateTime @default(now())
+  combo     KeyCombo @relation(fields: [comboId], references: [id], onDelete: Cascade)
+
+  @@index([comboId])
 }
 
 // Mỗi API key user tạo phải subscribe vào N model admin để được gọi.
